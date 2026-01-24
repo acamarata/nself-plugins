@@ -10,7 +10,10 @@ import type {
   StripeProductRecord,
   StripePriceRecord,
   StripeSubscriptionRecord,
+  StripeSubscriptionItemRecord,
+  StripeSubscriptionScheduleRecord,
   StripeInvoiceRecord,
+  StripeInvoiceItemRecord,
   StripePaymentIntentRecord,
   StripePaymentMethodRecord,
   StripeWebhookEventRecord,
@@ -24,6 +27,7 @@ import type {
   StripeBalanceTransactionRecord,
   StripeCreditNoteRecord,
   StripeTaxRateRecord,
+  StripeTaxIdRecord,
   SyncStats,
 } from './types.js';
 
@@ -44,11 +48,11 @@ export class StripeDatabase {
     await this.db.disconnect();
   }
 
-  async query<T>(sql: string, params?: unknown[]) {
+  async query<T extends Record<string, unknown>>(sql: string, params?: unknown[]): Promise<{ rows: T[]; rowCount: number | null }> {
     return this.db.query<T>(sql, params);
   }
 
-  async execute(sql: string, params?: unknown[]) {
+  async execute(sql: string, params?: unknown[]): Promise<number> {
     return this.db.execute(sql, params);
   }
 
@@ -974,6 +978,18 @@ export class StripeDatabase {
     return this.db.count('stripe_coupons', 'deleted_at IS NULL');
   }
 
+  async getCoupon(id: string): Promise<StripeCouponRecord | null> {
+    return this.db.queryOne<StripeCouponRecord>('SELECT * FROM stripe_coupons WHERE id = $1', [id]);
+  }
+
+  async listCoupons(limit = 100, offset = 0): Promise<StripeCouponRecord[]> {
+    const result = await this.db.query<StripeCouponRecord>(
+      'SELECT * FROM stripe_coupons WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
+    return result.rows;
+  }
+
   // =========================================================================
   // Promotion Codes
   // =========================================================================
@@ -1005,6 +1021,18 @@ export class StripeDatabase {
 
   async countPromotionCodes(): Promise<number> {
     return this.db.count('stripe_promotion_codes');
+  }
+
+  async getPromotionCode(id: string): Promise<StripePromotionCodeRecord | null> {
+    return this.db.queryOne<StripePromotionCodeRecord>('SELECT * FROM stripe_promotion_codes WHERE id = $1', [id]);
+  }
+
+  async listPromotionCodes(limit = 100, offset = 0): Promise<StripePromotionCodeRecord[]> {
+    const result = await this.db.query<StripePromotionCodeRecord>(
+      'SELECT * FROM stripe_promotion_codes ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
+    return result.rows;
   }
 
   // =========================================================================
@@ -1078,6 +1106,67 @@ export class StripeDatabase {
   async countSubscriptions(status?: string): Promise<number> {
     if (status) return this.db.count('stripe_subscriptions', 'status = $1', [status]);
     return this.db.count('stripe_subscriptions');
+  }
+
+  // =========================================================================
+  // Subscription Items
+  // =========================================================================
+
+  async upsertSubscriptionItem(item: StripeSubscriptionItemRecord): Promise<void> {
+    await this.db.execute(
+      `INSERT INTO stripe_subscription_items (
+        id, subscription_id, price_id, quantity, billing_thresholds, metadata, created_at, synced_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      ON CONFLICT (id) DO UPDATE SET
+        subscription_id = EXCLUDED.subscription_id, price_id = EXCLUDED.price_id,
+        quantity = EXCLUDED.quantity, billing_thresholds = EXCLUDED.billing_thresholds,
+        metadata = EXCLUDED.metadata, updated_at = NOW(), synced_at = NOW()`,
+      [
+        item.id, item.subscription_id, item.price_id, item.quantity,
+        item.billing_thresholds ? JSON.stringify(item.billing_thresholds) : null,
+        JSON.stringify(item.metadata), item.created_at,
+      ]
+    );
+  }
+
+  async upsertSubscriptionItems(items: StripeSubscriptionItemRecord[]): Promise<number> {
+    for (const item of items) await this.upsertSubscriptionItem(item);
+    return items.length;
+  }
+
+  // =========================================================================
+  // Subscription Schedules
+  // =========================================================================
+
+  async upsertSubscriptionSchedule(schedule: StripeSubscriptionScheduleRecord): Promise<void> {
+    await this.db.execute(
+      `INSERT INTO stripe_subscription_schedules (
+        id, customer_id, subscription_id, status, current_phase, default_settings,
+        end_behavior, phases, released_at, released_subscription, metadata,
+        created_at, canceled_at, completed_at, synced_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
+      ON CONFLICT (id) DO UPDATE SET
+        customer_id = EXCLUDED.customer_id, subscription_id = EXCLUDED.subscription_id,
+        status = EXCLUDED.status, current_phase = EXCLUDED.current_phase,
+        default_settings = EXCLUDED.default_settings, end_behavior = EXCLUDED.end_behavior,
+        phases = EXCLUDED.phases, released_at = EXCLUDED.released_at,
+        released_subscription = EXCLUDED.released_subscription, metadata = EXCLUDED.metadata,
+        canceled_at = EXCLUDED.canceled_at, completed_at = EXCLUDED.completed_at,
+        updated_at = NOW(), synced_at = NOW()`,
+      [
+        schedule.id, schedule.customer_id, schedule.subscription_id, schedule.status,
+        schedule.current_phase ? JSON.stringify(schedule.current_phase) : null,
+        JSON.stringify(schedule.default_settings), schedule.end_behavior,
+        JSON.stringify(schedule.phases), schedule.released_at, schedule.released_subscription,
+        JSON.stringify(schedule.metadata), schedule.created_at, schedule.canceled_at,
+        schedule.completed_at,
+      ]
+    );
+  }
+
+  async upsertSubscriptionSchedules(schedules: StripeSubscriptionScheduleRecord[]): Promise<number> {
+    for (const schedule of schedules) await this.upsertSubscriptionSchedule(schedule);
+    return schedules.length;
   }
 
   // =========================================================================
@@ -1166,6 +1255,41 @@ export class StripeDatabase {
   }
 
   // =========================================================================
+  // Invoice Items
+  // =========================================================================
+
+  async upsertInvoiceItem(item: StripeInvoiceItemRecord): Promise<void> {
+    await this.db.execute(
+      `INSERT INTO stripe_invoice_items (
+        id, customer_id, invoice_id, subscription_id, subscription_item_id, price_id,
+        amount, currency, description, discountable, quantity, unit_amount,
+        unit_amount_decimal, period_start, period_end, proration, metadata, created_at, synced_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW())
+      ON CONFLICT (id) DO UPDATE SET
+        customer_id = EXCLUDED.customer_id, invoice_id = EXCLUDED.invoice_id,
+        subscription_id = EXCLUDED.subscription_id, subscription_item_id = EXCLUDED.subscription_item_id,
+        price_id = EXCLUDED.price_id, amount = EXCLUDED.amount, currency = EXCLUDED.currency,
+        description = EXCLUDED.description, discountable = EXCLUDED.discountable,
+        quantity = EXCLUDED.quantity, unit_amount = EXCLUDED.unit_amount,
+        unit_amount_decimal = EXCLUDED.unit_amount_decimal, period_start = EXCLUDED.period_start,
+        period_end = EXCLUDED.period_end, proration = EXCLUDED.proration,
+        metadata = EXCLUDED.metadata, updated_at = NOW(), synced_at = NOW()`,
+      [
+        item.id, item.customer_id, item.invoice_id, item.subscription_id,
+        item.subscription_item_id, item.price_id, item.amount, item.currency,
+        item.description, item.discountable, item.quantity, item.unit_amount,
+        item.unit_amount_decimal, item.period_start, item.period_end, item.proration,
+        JSON.stringify(item.metadata), item.created_at,
+      ]
+    );
+  }
+
+  async upsertInvoiceItems(items: StripeInvoiceItemRecord[]): Promise<number> {
+    for (const item of items) await this.upsertInvoiceItem(item);
+    return items.length;
+  }
+
+  // =========================================================================
   // Charges
   // =========================================================================
 
@@ -1219,6 +1343,18 @@ export class StripeDatabase {
     return this.db.count('stripe_charges');
   }
 
+  async getCharge(id: string): Promise<StripeChargeRecord | null> {
+    return this.db.queryOne<StripeChargeRecord>('SELECT * FROM stripe_charges WHERE id = $1', [id]);
+  }
+
+  async listCharges(limit = 100, offset = 0): Promise<StripeChargeRecord[]> {
+    const result = await this.db.query<StripeChargeRecord>(
+      'SELECT * FROM stripe_charges ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
+    return result.rows;
+  }
+
   // =========================================================================
   // Refunds
   // =========================================================================
@@ -1256,6 +1392,18 @@ export class StripeDatabase {
     return this.db.count('stripe_refunds');
   }
 
+  async getRefund(id: string): Promise<StripeRefundRecord | null> {
+    return this.db.queryOne<StripeRefundRecord>('SELECT * FROM stripe_refunds WHERE id = $1', [id]);
+  }
+
+  async listRefunds(limit = 100, offset = 0): Promise<StripeRefundRecord[]> {
+    const result = await this.db.query<StripeRefundRecord>(
+      'SELECT * FROM stripe_refunds ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
+    return result.rows;
+  }
+
   // =========================================================================
   // Disputes
   // =========================================================================
@@ -1291,6 +1439,18 @@ export class StripeDatabase {
 
   async countDisputes(): Promise<number> {
     return this.db.count('stripe_disputes');
+  }
+
+  async getDispute(id: string): Promise<StripeDisputeRecord | null> {
+    return this.db.queryOne<StripeDisputeRecord>('SELECT * FROM stripe_disputes WHERE id = $1', [id]);
+  }
+
+  async listDisputes(limit = 100, offset = 0): Promise<StripeDisputeRecord[]> {
+    const result = await this.db.query<StripeDisputeRecord>(
+      'SELECT * FROM stripe_disputes ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
+    return result.rows;
   }
 
   // =========================================================================
@@ -1350,6 +1510,18 @@ export class StripeDatabase {
 
   async countPaymentIntents(): Promise<number> {
     return this.db.count('stripe_payment_intents');
+  }
+
+  async getPaymentIntent(id: string): Promise<StripePaymentIntentRecord | null> {
+    return this.db.queryOne<StripePaymentIntentRecord>('SELECT * FROM stripe_payment_intents WHERE id = $1', [id]);
+  }
+
+  async listPaymentIntents(limit = 100, offset = 0): Promise<StripePaymentIntentRecord[]> {
+    const result = await this.db.query<StripePaymentIntentRecord>(
+      'SELECT * FROM stripe_payment_intents ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
+    return result.rows;
   }
 
   // =========================================================================
@@ -1428,6 +1600,18 @@ export class StripeDatabase {
     return this.db.count('stripe_payment_methods');
   }
 
+  async getPaymentMethod(id: string): Promise<StripePaymentMethodRecord | null> {
+    return this.db.queryOne<StripePaymentMethodRecord>('SELECT * FROM stripe_payment_methods WHERE id = $1', [id]);
+  }
+
+  async listPaymentMethods(limit = 100, offset = 0): Promise<StripePaymentMethodRecord[]> {
+    const result = await this.db.query<StripePaymentMethodRecord>(
+      'SELECT * FROM stripe_payment_methods ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
+    return result.rows;
+  }
+
   // =========================================================================
   // Balance Transactions
   // =========================================================================
@@ -1458,6 +1642,18 @@ export class StripeDatabase {
 
   async countBalanceTransactions(): Promise<number> {
     return this.db.count('stripe_balance_transactions');
+  }
+
+  async getBalanceTransaction(id: string): Promise<StripeBalanceTransactionRecord | null> {
+    return this.db.queryOne<StripeBalanceTransactionRecord>('SELECT * FROM stripe_balance_transactions WHERE id = $1', [id]);
+  }
+
+  async listBalanceTransactions(limit = 100, offset = 0): Promise<StripeBalanceTransactionRecord[]> {
+    const result = await this.db.query<StripeBalanceTransactionRecord>(
+      'SELECT * FROM stripe_balance_transactions ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
+    return result.rows;
   }
 
   // =========================================================================
@@ -1577,6 +1773,43 @@ export class StripeDatabase {
     return this.db.count('stripe_tax_rates');
   }
 
+  async getTaxRate(id: string): Promise<StripeTaxRateRecord | null> {
+    return this.db.queryOne<StripeTaxRateRecord>('SELECT * FROM stripe_tax_rates WHERE id = $1', [id]);
+  }
+
+  async listTaxRates(limit = 100, offset = 0): Promise<StripeTaxRateRecord[]> {
+    const result = await this.db.query<StripeTaxRateRecord>(
+      'SELECT * FROM stripe_tax_rates WHERE active = TRUE ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
+    return result.rows;
+  }
+
+  // =========================================================================
+  // Tax IDs
+  // =========================================================================
+
+  async upsertTaxId(taxId: StripeTaxIdRecord): Promise<void> {
+    await this.db.execute(
+      `INSERT INTO stripe_tax_ids (
+        id, customer_id, type, value, country, verification, created_at, synced_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      ON CONFLICT (id) DO UPDATE SET
+        customer_id = EXCLUDED.customer_id, type = EXCLUDED.type,
+        value = EXCLUDED.value, country = EXCLUDED.country,
+        verification = EXCLUDED.verification, synced_at = NOW()`,
+      [
+        taxId.id, taxId.customer_id, taxId.type, taxId.value, taxId.country,
+        taxId.verification ? JSON.stringify(taxId.verification) : null, taxId.created_at,
+      ]
+    );
+  }
+
+  async upsertTaxIds(taxIds: StripeTaxIdRecord[]): Promise<number> {
+    for (const taxId of taxIds) await this.upsertTaxId(taxId);
+    return taxIds.length;
+  }
+
   // =========================================================================
   // Webhook Events
   // =========================================================================
@@ -1624,6 +1857,21 @@ export class StripeDatabase {
     );
   }
 
+  async listWebhookEvents(type?: string, limit = 100, offset = 0): Promise<StripeWebhookEventRecord[]> {
+    if (type) {
+      const result = await this.db.query<StripeWebhookEventRecord>(
+        'SELECT * FROM stripe_webhook_events WHERE type = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+        [type, limit, offset]
+      );
+      return result.rows;
+    }
+    const result = await this.db.query<StripeWebhookEventRecord>(
+      'SELECT * FROM stripe_webhook_events ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
+    return result.rows;
+  }
+
   // =========================================================================
   // Stats
   // =========================================================================
@@ -1633,7 +1881,8 @@ export class StripeDatabase {
       customers, products, prices, coupons, promotionCodes, subscriptions,
       subscriptionItems, subscriptionSchedules, invoices, invoiceItems,
       creditNotes, charges, refunds, disputes, paymentIntents, setupIntents,
-      paymentMethods, balanceTransactions, checkoutSessions, taxIds, taxRates
+      paymentMethods, balanceTransactions, checkoutSessions, taxIds, taxRates,
+      lastSyncResult
     ] = await Promise.all([
       this.countCustomers(),
       this.countProducts(),
@@ -1656,6 +1905,7 @@ export class StripeDatabase {
       this.countCheckoutSessions(),
       this.db.count('stripe_tax_ids'),
       this.countTaxRates(),
+      this.db.queryOne<{ max_synced: Date | null }>('SELECT MAX(synced_at) as max_synced FROM stripe_customers'),
     ]);
 
     return {
@@ -1663,6 +1913,7 @@ export class StripeDatabase {
       subscriptionItems, subscriptionSchedules, invoices, invoiceItems,
       creditNotes, charges, refunds, disputes, paymentIntents, setupIntents,
       paymentMethods, balanceTransactions, checkoutSessions, taxIds, taxRates,
+      lastSyncedAt: lastSyncResult?.max_synced ?? null,
     };
   }
 }

@@ -76,7 +76,7 @@ export async function createServer(config?: Partial<Config>) {
   });
 
   // Readiness check (verifies database connectivity)
-  app.get('/ready', async (request, reply) => {
+  app.get('/ready', async (_request, reply) => {
     try {
       await db.execute('SELECT 1');
       return { ready: true, plugin: 'github', timestamp: new Date().toISOString() };

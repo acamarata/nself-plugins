@@ -130,6 +130,21 @@ export class GitHubClient {
       visibility: repo.visibility as string ?? 'public',
       archived: repo.archived as boolean ?? false,
       disabled: repo.disabled as boolean ?? false,
+      has_issues: repo.has_issues as boolean ?? true,
+      has_projects: repo.has_projects as boolean ?? true,
+      has_wiki: repo.has_wiki as boolean ?? true,
+      has_pages: repo.has_pages as boolean ?? false,
+      has_downloads: repo.has_downloads as boolean ?? true,
+      has_discussions: repo.has_discussions as boolean ?? false,
+      is_template: repo.is_template as boolean ?? false,
+      allow_forking: repo.allow_forking as boolean ?? true,
+      web_commit_signoff_required: repo.web_commit_signoff_required as boolean ?? false,
+      license: repo.license ? {
+        key: (repo.license as Record<string, unknown>).key as string,
+        name: (repo.license as Record<string, unknown>).name as string,
+        spdx_id: (repo.license as Record<string, unknown>).spdx_id as string | null,
+        url: (repo.license as Record<string, unknown>).url as string | null,
+      } : null,
       pushed_at: repo.pushed_at ? new Date(repo.pushed_at as string) : null,
       created_at: new Date(repo.created_at as string),
       updated_at: new Date(repo.updated_at as string),
@@ -160,7 +175,7 @@ export class GitHubClient {
             });
             protection = {
               required_status_checks: protData.required_status_checks ? {
-                strict: protData.required_status_checks.strict,
+                strict: protData.required_status_checks.strict ?? false,
                 contexts: protData.required_status_checks.contexts,
               } : null,
               required_pull_request_reviews: protData.required_pull_request_reviews ? {
@@ -312,6 +327,7 @@ export class GitHubClient {
       user_id: user?.id ?? 0,
       head_ref: head?.ref ?? '',
       head_sha: head?.sha ?? '',
+      head_repo_id: (pr.head as { repo?: { id: number } })?.repo?.id ?? null,
       base_ref: base?.ref ?? '',
       base_sha: base?.sha ?? '',
       merged: pr.merged as boolean ?? false,
@@ -1033,11 +1049,11 @@ export class GitHubClient {
         privacy: t.privacy ?? 'closed',
         permission: t.permission ?? 'pull',
         parent_id: t.parent?.id ?? null,
-        members_count: t.members_count ?? 0,
-        repos_count: t.repos_count ?? 0,
+        members_count: (t as Record<string, unknown>).members_count as number ?? 0,
+        repos_count: (t as Record<string, unknown>).repos_count as number ?? 0,
         html_url: t.html_url,
-        created_at: new Date(t.created_at ?? new Date()),
-        updated_at: new Date(t.updated_at ?? new Date()),
+        created_at: new Date((t as Record<string, unknown>).created_at as string ?? new Date()),
+        updated_at: new Date((t as Record<string, unknown>).updated_at as string ?? new Date()),
       })));
     }
 
@@ -1119,8 +1135,8 @@ export class GitHubClient {
       return data.map(s => ({
         id: s.id,
         state: s.state,
-        description: s.description,
-        environment_url: s.environment_url,
+        description: s.description ?? '',
+        environment_url: s.environment_url ?? null,
         created_at: s.created_at,
       }));
     } catch {

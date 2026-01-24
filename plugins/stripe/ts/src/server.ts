@@ -71,7 +71,7 @@ export async function createServer(config?: Partial<Config>) {
   });
 
   // Readiness check (verifies database connectivity)
-  app.get('/ready', async (request, reply) => {
+  app.get('/ready', async (_request, reply) => {
     try {
       await db.query('SELECT 1');
       return { ready: true, plugin: 'stripe', timestamp: new Date().toISOString() };
@@ -388,23 +388,6 @@ export async function createServer(config?: Partial<Config>) {
       return reply.status(404).send({ error: 'Balance transaction not found' });
     }
     return transaction;
-  });
-
-  // Payouts
-  app.get('/api/payouts', async (request) => {
-    const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const payouts = await db.listPayouts(limit, offset);
-    const total = await db.countPayouts();
-    return { data: payouts, total, limit, offset };
-  });
-
-  app.get('/api/payouts/:id', async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const payout = await db.getPayout(id);
-    if (!payout) {
-      return reply.status(404).send({ error: 'Payout not found' });
-    }
-    return payout;
   });
 
   // Tax Rates

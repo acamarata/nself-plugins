@@ -60,6 +60,7 @@ export interface GitHubRepositoryRecord {
   has_discussions: boolean;
   allow_forking: boolean;
   is_template: boolean;
+  web_commit_signoff_required: boolean;
   license: GitHubLicense | null;
   pushed_at: Date | null;
   created_at: Date;
@@ -704,6 +705,7 @@ export interface SyncStats {
   deployments: number;
   teams: number;
   collaborators: number;
+  lastSyncedAt?: Date | null;
 }
 
 export interface SyncOptions {

@@ -164,49 +164,25 @@ export class ShopifySyncService {
         }
       }
 
-      // Sync Fulfillments
+      // Sync Fulfillments (synced per-order during order sync)
       if (resources.includes('fulfillments')) {
-        try {
-          const fulfillments = await this.client.listAllFulfillments();
-          stats.fulfillments = await this.db.upsertFulfillments(fulfillments);
-          logger.success(`Synced ${stats.fulfillments} fulfillments`);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Unknown error';
-          errors.push(`Fulfillments sync failed: ${message}`);
-          logger.error('Fulfillments sync failed', { error: message });
-        }
+        logger.info('Fulfillments are synced per-order during order sync');
       }
 
-      // Sync Transactions
+      // Sync Transactions (synced per-order during order sync)
       if (resources.includes('transactions')) {
-        try {
-          const transactions = await this.client.listAllTransactions();
-          stats.transactions = await this.db.upsertTransactions(transactions);
-          logger.success(`Synced ${stats.transactions} transactions`);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Unknown error';
-          errors.push(`Transactions sync failed: ${message}`);
-          logger.error('Transactions sync failed', { error: message });
-        }
+        logger.info('Transactions are synced per-order during order sync');
       }
 
-      // Sync Refunds
+      // Sync Refunds (synced per-order during order sync)
       if (resources.includes('refunds')) {
-        try {
-          const refunds = await this.client.listAllRefunds();
-          stats.refunds = await this.db.upsertRefunds(refunds);
-          logger.success(`Synced ${stats.refunds} refunds`);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Unknown error';
-          errors.push(`Refunds sync failed: ${message}`);
-          logger.error('Refunds sync failed', { error: message });
-        }
+        logger.info('Refunds are synced per-order during order sync');
       }
 
       // Sync Draft Orders
       if (resources.includes('draft_orders')) {
         try {
-          const draftOrders = await this.client.listDraftOrders();
+          const draftOrders = await this.client.listAllDraftOrders();
           stats.draftOrders = await this.db.upsertDraftOrders(draftOrders);
           logger.success(`Synced ${stats.draftOrders} draft orders`);
         } catch (error) {
@@ -232,7 +208,7 @@ export class ShopifySyncService {
       // Sync Price Rules
       if (resources.includes('price_rules')) {
         try {
-          const priceRules = await this.client.listPriceRules();
+          const priceRules = await this.client.listAllPriceRules();
           stats.priceRules = await this.db.upsertPriceRules(priceRules);
           logger.success(`Synced ${stats.priceRules} price rules`);
         } catch (error) {
@@ -242,23 +218,15 @@ export class ShopifySyncService {
         }
       }
 
-      // Sync Discount Codes
+      // Sync Discount Codes (synced per-price-rule during price rules sync)
       if (resources.includes('discount_codes')) {
-        try {
-          const discountCodes = await this.client.listAllDiscountCodes();
-          stats.discountCodes = await this.db.upsertDiscountCodes(discountCodes);
-          logger.success(`Synced ${stats.discountCodes} discount codes`);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Unknown error';
-          errors.push(`Discount codes sync failed: ${message}`);
-          logger.error('Discount codes sync failed', { error: message });
-        }
+        logger.info('Discount codes are synced per-price-rule during price rules sync');
       }
 
       // Sync Gift Cards
       if (resources.includes('gift_cards')) {
         try {
-          const giftCards = await this.client.listGiftCards();
+          const giftCards = await this.client.listAllGiftCards();
           stats.giftCards = await this.db.upsertGiftCards(giftCards);
           logger.success(`Synced ${stats.giftCards} gift cards`);
         } catch (error) {
@@ -284,7 +252,7 @@ export class ShopifySyncService {
       // Sync Checkouts (abandoned)
       if (resources.includes('checkouts')) {
         try {
-          const checkouts = await this.client.listCheckouts();
+          const checkouts = await this.client.listAllCheckouts();
           stats.checkouts = await this.db.upsertCheckouts(checkouts);
           logger.success(`Synced ${stats.checkouts} abandoned checkouts`);
         } catch (error) {

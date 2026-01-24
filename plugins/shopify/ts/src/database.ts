@@ -1808,7 +1808,7 @@ export class ShopifyDatabase {
   // Raw Query (for analytics)
   // =========================================================================
 
-  async query<T = Record<string, unknown>>(
+  async query<T extends Record<string, unknown> = Record<string, unknown>>(
     sql: string,
     params?: unknown[]
   ): Promise<{ rows: T[] }> {

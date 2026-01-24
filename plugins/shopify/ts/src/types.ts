@@ -84,10 +84,10 @@ export interface ShopifyLocationRecord {
   localized_province_name: string | null;
   active: boolean;
   legacy: boolean;
-  fulfills_online_orders: boolean;
+  fulfills_online_orders?: boolean;
   admin_graphql_api_id: string | null;
-  created_at: Date;
-  updated_at: Date;
+  created_at: Date | null;
+  updated_at: Date | null;
 }
 
 // =============================================================================
@@ -562,6 +562,8 @@ export interface ShopifyDraftOrderRecord {
   taxes_included: boolean;
   note: string | null;
   tags: string | null;
+  discount_codes?: ShopifyDiscountCode[];
+  note_attributes?: ShopifyNoteAttribute[];
   line_items: ShopifyDraftOrderLineItem[];
   shipping_address: ShopifyAddress | null;
   billing_address: ShopifyAddress | null;
@@ -676,6 +678,7 @@ export interface ShopifyDiscountCodeRecord {
   price_rule_id: number;
   code: string;
   usage_count: number;
+  admin_graphql_api_id?: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -779,6 +782,7 @@ export interface ShopifyCheckoutRecord {
   customer_locale: string | null;
   gateway: string | null;
   landing_site: string | null;
+  referring_site?: string | null;
   buyer_accepts_marketing: boolean;
   currency: string;
   subtotal_price: number;
@@ -792,6 +796,7 @@ export interface ShopifyCheckoutRecord {
   closed_at: Date | null;
   abandoned_checkout_url: string | null;
   discount_codes: ShopifyDiscountCode[];
+  tax_lines?: ShopifyTaxLine[];
   line_items: ShopifyCheckoutLineItem[];
   shipping_address: ShopifyAddress | null;
   billing_address: ShopifyAddress | null;
@@ -802,6 +807,7 @@ export interface ShopifyCheckoutRecord {
   source_name: string | null;
   source_identifier: string | null;
   source_url: string | null;
+  admin_graphql_api_id?: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -884,11 +890,13 @@ export interface SyncStats {
   refunds: number;
   draftOrders: number;
   inventory: number;
+  inventoryItems?: number;
   priceRules: number;
   discountCodes: number;
   giftCards: number;
   metafields: number;
   checkouts: number;
+  lastSyncedAt?: Date | null;
 }
 
 export interface SyncOptions {

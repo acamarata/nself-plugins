@@ -618,6 +618,7 @@ export interface SyncStats {
   checkoutSessions: number;
   taxIds: number;
   taxRates: number;
+  lastSyncedAt?: Date | null;
 }
 
 export interface SyncOptions {

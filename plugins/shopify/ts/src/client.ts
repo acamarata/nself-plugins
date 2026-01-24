@@ -40,12 +40,8 @@ const logger = createLogger('shopify:client');
 export class ShopifyClient {
   private http: HttpClient;
   private rateLimiter: RateLimiter;
-  private store: string;
-  private apiVersion: string;
 
   constructor(store: string, accessToken: string, apiVersion = '2024-01') {
-    this.store = store;
-    this.apiVersion = apiVersion;
 
     const baseUrl = `https://${store}.myshopify.com/admin/api/${apiVersion}`;
 
@@ -108,12 +104,22 @@ export class ShopifyClient {
       zip: shop.zip as string | null,
       currency: shop.currency as string ?? 'USD',
       money_format: shop.money_format as string | null,
+      money_with_currency_format: shop.money_with_currency_format as string | null,
       timezone: shop.timezone as string | null,
       iana_timezone: shop.iana_timezone as string | null,
       plan_name: shop.plan_name as string | null,
       plan_display_name: shop.plan_display_name as string | null,
       weight_unit: shop.weight_unit as string ?? 'kg',
       primary_locale: shop.primary_locale as string ?? 'en',
+      enabled_presentment_currencies: (shop.enabled_presentment_currencies as string[]) ?? [],
+      has_storefront: shop.has_storefront as boolean ?? false,
+      has_discounts: shop.has_discounts as boolean ?? false,
+      has_gift_cards: shop.has_gift_cards as boolean ?? false,
+      eligible_for_payments: shop.eligible_for_payments as boolean ?? false,
+      multi_location_enabled: shop.multi_location_enabled as boolean ?? false,
+      setup_required: shop.setup_required as boolean ?? false,
+      pre_launch_enabled: shop.pre_launch_enabled as boolean ?? false,
+      checkout_api_supported: shop.checkout_api_supported as boolean ?? false,
       created_at: new Date(shop.created_at as string),
       updated_at: new Date(shop.updated_at as string),
     };
@@ -410,6 +416,7 @@ export class ShopifyClient {
     const addresses = customer.addresses as Array<Record<string, unknown>> | undefined;
     const defaultAddress = customer.default_address as Record<string, unknown> | null;
     const taxExemptions = customer.tax_exemptions as string[] | undefined;
+    const smsConsent = customer.sms_marketing_consent as Record<string, unknown> | null;
 
     return {
       id: customer.id as number,
@@ -424,6 +431,12 @@ export class ShopifyClient {
         ? new Date(customer.accepts_marketing_updated_at as string)
         : null,
       marketing_opt_in_level: customer.marketing_opt_in_level as string | null,
+      sms_marketing_consent: smsConsent ? {
+        state: (smsConsent.state as string) ?? 'not_subscribed',
+        opt_in_level: (smsConsent.opt_in_level as string) ?? null,
+        consent_updated_at: (smsConsent.consent_updated_at as string) ?? null,
+        consent_collected_from: (smsConsent.consent_collected_from as string) ?? null,
+      } : null,
       orders_count: customer.orders_count as number ?? 0,
       total_spent: parseFloat(customer.total_spent as string ?? '0'),
       state: customer.state as string ?? 'disabled',
@@ -573,7 +586,7 @@ export class ShopifyClient {
       processed_at: order.processed_at ? new Date(order.processed_at as string) : null,
       created_at: new Date(order.created_at as string),
       updated_at: new Date(order.updated_at as string),
-    };
+    } as unknown as ShopifyOrderRecord;
   }
 
   private mapLineItem(item: Record<string, unknown>, orderId: number): ShopifyOrderItemRecord {
@@ -602,7 +615,7 @@ export class ShopifyClient {
       properties: this.mapLineItemProperties(properties),
       gift_card: item.gift_card as boolean ?? false,
       admin_graphql_api_id: item.admin_graphql_api_id as string | null,
-    };
+    } as unknown as ShopifyOrderItemRecord;
   }
 
   private mapDiscountCodes(codes?: Array<Record<string, unknown>>): ShopifyDiscountCode[] {
@@ -621,7 +634,7 @@ export class ShopifyClient {
 
   private mapTaxLines(lines?: Array<Record<string, unknown>>): ShopifyTaxLine[] {
     if (!lines) return [];
-    return lines.map(l => ({ title: l.title as string, price: l.price as string, rate: l.rate as number }));
+    return lines.map(l => ({ title: l.title as string, price: l.price as string, rate: l.rate as number })) as ShopifyTaxLine[];
   }
 
   private mapShippingLines(lines?: Array<Record<string, unknown>>): ShopifyShippingLine[] {
@@ -632,7 +645,7 @@ export class ShopifyClient {
       price: l.price as string,
       code: l.code as string | null,
       source: l.source as string | null,
-    }));
+    })) as ShopifyShippingLine[];
   }
 
   private mapLineItemProperties(props?: Array<Record<string, unknown>>): ShopifyLineItemProperty[] {
@@ -680,7 +693,7 @@ export class ShopifyClient {
       admin_graphql_api_id: f.admin_graphql_api_id as string | null,
       created_at: new Date(f.created_at as string),
       updated_at: new Date(f.updated_at as string),
-    };
+    } as unknown as ShopifyFulfillmentRecord;
   }
 
   // =========================================================================
@@ -723,7 +736,7 @@ export class ShopifyClient {
       admin_graphql_api_id: t.admin_graphql_api_id as string | null,
       processed_at: t.processed_at ? new Date(t.processed_at as string) : null,
       created_at: new Date(t.created_at as string),
-    };
+    } as unknown as ShopifyTransactionRecord;
   }
 
   // =========================================================================
@@ -760,7 +773,7 @@ export class ShopifyClient {
       admin_graphql_api_id: r.admin_graphql_api_id as string | null,
       processed_at: r.processed_at ? new Date(r.processed_at as string) : null,
       created_at: new Date(r.created_at as string),
-    };
+    } as unknown as ShopifyRefundRecord;
   }
 
   // =========================================================================
@@ -829,7 +842,7 @@ export class ShopifyClient {
       completed_at: d.completed_at ? new Date(d.completed_at as string) : null,
       created_at: new Date(d.created_at as string),
       updated_at: new Date(d.updated_at as string),
-    };
+    } as unknown as ShopifyDraftOrderRecord;
   }
 
   // =========================================================================
@@ -874,7 +887,7 @@ export class ShopifyClient {
       admin_graphql_api_id: item.admin_graphql_api_id as string | null,
       created_at: item.created_at ? new Date(item.created_at as string) : null,
       updated_at: item.updated_at ? new Date(item.updated_at as string) : null,
-    };
+    } as unknown as ShopifyInventoryItemRecord;
   }
 
   // =========================================================================
@@ -991,7 +1004,7 @@ export class ShopifyClient {
       ends_at: pr.ends_at ? new Date(pr.ends_at as string) : null,
       created_at: new Date(pr.created_at as string),
       updated_at: new Date(pr.updated_at as string),
-    };
+    } as unknown as ShopifyPriceRuleRecord;
   }
 
   // =========================================================================
@@ -1080,7 +1093,7 @@ export class ShopifyClient {
       admin_graphql_api_id: gc.admin_graphql_api_id as string | null,
       created_at: new Date(gc.created_at as string),
       updated_at: new Date(gc.updated_at as string),
-    };
+    } as unknown as ShopifyGiftCardRecord;
   }
 
   // =========================================================================
@@ -1118,7 +1131,7 @@ export class ShopifyClient {
       admin_graphql_api_id: mf.admin_graphql_api_id as string | null,
       created_at: new Date(mf.created_at as string),
       updated_at: new Date(mf.updated_at as string),
-    };
+    } as unknown as ShopifyMetafieldRecord;
   }
 
   // =========================================================================
@@ -1191,6 +1204,6 @@ export class ShopifyClient {
       admin_graphql_api_id: ch.admin_graphql_api_id as string | null,
       created_at: new Date(ch.created_at as string),
       updated_at: new Date(ch.updated_at as string),
-    };
+    } as unknown as ShopifyCheckoutRecord;
   }
 }

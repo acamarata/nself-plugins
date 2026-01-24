@@ -524,7 +524,7 @@ export class StripeWebhookHandler {
     await this.syncService.syncSingleResource('invoice', invoice.id);
   }
 
-  private async handleInvoiceUpcoming(event: Stripe.Event): Promise<void> {
+  private async handleInvoiceUpcoming(_event: Stripe.Event): Promise<void> {
     // Upcoming invoices don't have an ID yet, just log
     logger.info('Upcoming invoice notification received');
   }
@@ -842,7 +842,7 @@ export class StripeWebhookHandler {
   // Balance Handlers
   // =========================================================================
 
-  private async handleBalanceAvailable(event: Stripe.Event): Promise<void> {
+  private async handleBalanceAvailable(_event: Stripe.Event): Promise<void> {
     // Balance events are informational, just log
     logger.info('Balance available updated');
   }

@@ -67,8 +67,9 @@ export async function createServer(config: ShopifyConfig): Promise<ShopifyServer
     { parseAs: 'buffer' },
     (req, body, done) => {
       try {
-        const json = JSON.parse(body.toString());
-        (req as unknown as { rawBody: Buffer }).rawBody = body;
+        const rawBody = Buffer.isBuffer(body) ? body : Buffer.from(body);
+        const json = JSON.parse(rawBody.toString());
+        (req as unknown as { rawBody: Buffer }).rawBody = rawBody;
         done(null, json);
       } catch (err) {
         done(err as Error, undefined);

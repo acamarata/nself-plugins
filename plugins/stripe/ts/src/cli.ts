@@ -6,7 +6,7 @@
 
 import { Command } from 'commander';
 import { createLogger } from '@nself/plugin-utils';
-import { loadConfig, isTestMode, isLiveMode } from './config.js';
+import { loadConfig, isTestMode } from './config.js';
 import { StripeClient } from './client.js';
 import { StripeDatabase } from './database.js';
 import { StripeSyncService } from './sync.js';

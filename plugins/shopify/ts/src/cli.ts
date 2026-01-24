@@ -173,7 +173,7 @@ program
       console.log('-'.repeat(100));
       products.forEach(p => {
         const status = p.status === 'active' ? '✅' : '❌';
-        console.log(`${status} | ${p.title.substring(0, 50).padEnd(50)} | ${p.vendor || 'N/A'} | $${p.variants_min_price ?? '0'}`);
+        console.log(`${status} | ${p.title.substring(0, 50).padEnd(50)} | ${p.vendor || 'N/A'} | ${p.product_type || 'N/A'}`);
       });
       console.log(`\nTotal: ${await db.countProducts()}`);
 
@@ -228,7 +228,9 @@ program
       console.log('-'.repeat(100));
       orders.forEach(o => {
         const status = o.financial_status === 'paid' ? '✅' : (o.financial_status === 'refunded' ? '💰' : '⏳');
-        console.log(`${status} | ${o.name.padEnd(10)} | $${parseFloat(o.total_price).toFixed(2).padStart(10)} | ${o.financial_status.padEnd(12)} | ${o.fulfillment_status || 'unfulfilled'}`);
+        const totalPrice = o.total_price != null ? o.total_price.toFixed(2) : '0.00';
+        const financialStatus = o.financial_status ?? 'unknown';
+        console.log(`${status} | ${o.name.padEnd(10)} | $${totalPrice.padStart(10)} | ${financialStatus.padEnd(12)} | ${o.fulfillment_status || 'unfulfilled'}`);
       });
       console.log(`\nTotal: ${await db.countOrders()}`);
 
@@ -254,7 +256,8 @@ program
       console.log('\nCollections:');
       console.log('-'.repeat(100));
       collections.forEach(c => {
-        console.log(`${c.title.substring(0, 50).padEnd(50)} | ${c.collection_type.padEnd(10)} | Products: ${c.products_count ?? 'N/A'}`);
+        const collectionType = c.collection_type ?? 'N/A';
+        console.log(`${c.title.substring(0, 50).padEnd(50)} | ${collectionType.padEnd(10)} | Products: ${c.products_count ?? 'N/A'}`);
       });
       console.log(`\nTotal: ${await db.countCollections()}`);
 
@@ -310,7 +313,8 @@ program
       events.forEach(e => {
         const status = e.processed ? (e.error ? '❌' : '✅') : '⏳';
         const time = new Date(e.received_at).toISOString();
-        console.log(`${status} | ${e.topic.padEnd(30)} | ${e.shop_domain.padEnd(30)} | ${time}`);
+        const shopDomain = e.shop_domain ?? 'N/A';
+        console.log(`${status} | ${e.topic.padEnd(30)} | ${shopDomain.padEnd(30)} | ${time}`);
       });
 
       await db.disconnect();
@@ -339,10 +343,11 @@ program
 
       console.log('\nDaily Sales (Last 7 Days):');
       console.log('-'.repeat(60));
-      salesResult.rows.forEach((row: { order_date: Date; order_count: number; revenue: string }) => {
-        const date = new Date(row.order_date).toISOString().split('T')[0];
-        console.log(`${date} | Orders: ${row.order_count.toString().padStart(5)} | Revenue: $${parseFloat(row.revenue).toFixed(2).padStart(12)}`);
-      });
+      for (const row of salesResult.rows) {
+        const r = row as { order_date: Date; order_count: number; revenue: string };
+        const date = new Date(r.order_date).toISOString().split('T')[0];
+        console.log(`${date} | Orders: ${r.order_count.toString().padStart(5)} | Revenue: $${parseFloat(r.revenue).toFixed(2).padStart(12)}`);
+      }
 
       // Top products
       const topProductsResult = await db.query(
@@ -351,18 +356,20 @@ program
 
       console.log('\nTop Products (by units sold):');
       console.log('-'.repeat(80));
-      topProductsResult.rows.forEach((row: { title: string; units_sold: number; revenue: string }) => {
-        console.log(`${row.title.substring(0, 40).padEnd(40)} | Qty: ${row.units_sold.toString().padStart(6)} | Revenue: $${parseFloat(row.revenue).toFixed(2).padStart(12)}`);
-      });
+      for (const row of topProductsResult.rows) {
+        const r = row as { title: string; units_sold: number; revenue: string };
+        console.log(`${r.title.substring(0, 40).padEnd(40)} | Qty: ${r.units_sold.toString().padStart(6)} | Revenue: $${parseFloat(r.revenue).toFixed(2).padStart(12)}`);
+      }
 
       // Top customers by value
       const customersResult = await db.query('SELECT * FROM shopify_customer_value LIMIT 10');
 
       console.log('\nTop Customers (by total spent):');
       console.log('-'.repeat(80));
-      customersResult.rows.forEach((row: { name: string; orders_count: number; total_spent: string }) => {
-        console.log(`${(row.name || 'N/A').substring(0, 30).padEnd(30)} | Orders: ${row.orders_count.toString().padStart(4)} | Total Spent: $${parseFloat(row.total_spent).toFixed(2).padStart(12)}`);
-      });
+      for (const row of customersResult.rows) {
+        const r = row as { name: string; orders_count: number; total_spent: string };
+        console.log(`${(r.name || 'N/A').substring(0, 30).padEnd(30)} | Orders: ${r.orders_count.toString().padStart(4)} | Total Spent: $${parseFloat(r.total_spent).toFixed(2).padStart(12)}`);
+      }
 
       await db.disconnect();
     } catch (error) {

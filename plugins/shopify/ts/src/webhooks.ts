@@ -370,14 +370,14 @@ export class ShopifyWebhookHandler {
     const draftOrderId = payload.id as number;
     logger.info('Draft order created', { draftOrderId, name: payload.name });
     // Sync draft orders
-    const draftOrders = await this.client.listDraftOrders();
+    const draftOrders = await this.client.listAllDraftOrders();
     await this.db.upsertDraftOrders(draftOrders);
   }
 
   private async handleDraftOrderUpdate(payload: WebhookPayload): Promise<void> {
     const draftOrderId = payload.id as number;
     logger.info('Draft order updated', { draftOrderId, name: payload.name });
-    const draftOrders = await this.client.listDraftOrders();
+    const draftOrders = await this.client.listAllDraftOrders();
     await this.db.upsertDraftOrders(draftOrders);
   }
 
@@ -434,14 +434,14 @@ export class ShopifyWebhookHandler {
   private async handleCheckoutCreate(payload: WebhookPayload): Promise<void> {
     const checkoutId = payload.id as number;
     logger.info('Checkout created', { checkoutId, email: payload.email });
-    const checkouts = await this.client.listCheckouts();
+    const checkouts = await this.client.listAllCheckouts();
     await this.db.upsertCheckouts(checkouts);
   }
 
   private async handleCheckoutUpdate(payload: WebhookPayload): Promise<void> {
     const checkoutId = payload.id as number;
     logger.info('Checkout updated', { checkoutId });
-    const checkouts = await this.client.listCheckouts();
+    const checkouts = await this.client.listAllCheckouts();
     await this.db.upsertCheckouts(checkouts);
   }
 
