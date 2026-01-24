@@ -5,7 +5,7 @@
 
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { createLogger, verifyGitHubSignature } from '@nself/plugin-utils';
+import { createLogger, verifyGitHubSignature, ApiRateLimiter, createAuthHook, createRateLimitHook } from '@nself/plugin-utils';
 import { GitHubClient } from './client.js';
 import { GitHubDatabase } from './database.js';
 import { GitHubSyncService } from './sync.js';
@@ -43,6 +43,21 @@ export async function createServer(config?: Partial<Config>) {
     origin: true,
     credentials: true,
   });
+
+  // Security middleware
+  const rateLimiter = new ApiRateLimiter(
+    fullConfig.security.rateLimitMax ?? 100,
+    fullConfig.security.rateLimitWindowMs ?? 60000
+  );
+
+  // Add rate limiting to all requests
+  app.addHook('preHandler', createRateLimitHook(rateLimiter) as never);
+
+  // Add API key authentication (skips health check endpoints)
+  if (fullConfig.security.apiKey) {
+    app.addHook('preHandler', createAuthHook(fullConfig.security.apiKey) as never);
+    logger.info('API key authentication enabled');
+  }
 
   // Raw body parser for webhook signature verification
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {

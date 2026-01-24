@@ -3,6 +3,7 @@
  */
 
 import 'dotenv/config';
+import { requireWebhookSecret, loadSecurityConfig, type SecurityConfig } from '@nself/plugin-utils';
 
 export interface Config {
   // GitHub
@@ -26,11 +27,15 @@ export interface Config {
   // Sync
   syncInterval: number;
   logLevel: string;
+
+  // Security
+  security: SecurityConfig;
 }
 
 export function loadConfig(overrides?: Partial<Config>): Config {
   const reposEnv = process.env.GITHUB_REPOS;
   const repos = reposEnv ? reposEnv.split(',').map(r => r.trim()).filter(r => r) : undefined;
+  const security = loadSecurityConfig('GITHUB');
 
   const config: Config = {
     // GitHub
@@ -55,6 +60,9 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     syncInterval: parseInt(process.env.GITHUB_SYNC_INTERVAL ?? '3600', 10),
     logLevel: process.env.LOG_LEVEL ?? 'info',
 
+    // Security
+    security,
+
     // Apply overrides
     ...overrides,
   };
@@ -63,6 +71,14 @@ export function loadConfig(overrides?: Partial<Config>): Config {
   if (!config.githubToken) {
     throw new Error('GITHUB_TOKEN is required');
   }
+
+  // Validate GitHub token format (PAT or fine-grained)
+  if (!config.githubToken.match(/^(ghp_|github_pat_|gho_|ghu_|ghs_|ghr_)/)) {
+    throw new Error('Invalid GITHUB_TOKEN format. Expected a GitHub personal access token (ghp_*, github_pat_*, etc.)');
+  }
+
+  // Enforce webhook secret in production
+  requireWebhookSecret(config.githubWebhookSecret, 'github');
 
   return config;
 }

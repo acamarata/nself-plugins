@@ -5,7 +5,7 @@
 
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { createLogger, verifyStripeSignature } from '@nself/plugin-utils';
+import { createLogger, verifyStripeSignature, ApiRateLimiter, createAuthHook, createRateLimitHook } from '@nself/plugin-utils';
 import { StripeClient } from './client.js';
 import { StripeDatabase } from './database.js';
 import { StripeSyncService } from './sync.js';
@@ -38,6 +38,21 @@ export async function createServer(config?: Partial<Config>) {
     origin: true,
     credentials: true,
   });
+
+  // Security middleware
+  const rateLimiter = new ApiRateLimiter(
+    fullConfig.security.rateLimitMax ?? 100,
+    fullConfig.security.rateLimitWindowMs ?? 60000
+  );
+
+  // Add rate limiting to all requests
+  app.addHook('preHandler', createRateLimitHook(rateLimiter) as never);
+
+  // Add API key authentication (skips health check endpoints)
+  if (fullConfig.security.apiKey) {
+    app.addHook('preHandler', createAuthHook(fullConfig.security.apiKey) as never);
+    logger.info('API key authentication enabled');
+  }
 
   // Raw body parser for webhook signature verification
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {

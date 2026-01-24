@@ -6,7 +6,7 @@
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
 import crypto from 'crypto';
-import { createLogger } from '@nself/plugin-utils';
+import { createLogger, ApiRateLimiter, createAuthHook, createRateLimitHook } from '@nself/plugin-utils';
 import { ShopifyConfig } from './config.js';
 import { ShopifyClient } from './client.js';
 import { ShopifyDatabase } from './database.js';
@@ -32,6 +32,21 @@ export async function createServer(config: ShopifyConfig): Promise<ShopifyServer
     origin: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
   });
+
+  // Security middleware
+  const rateLimiter = new ApiRateLimiter(
+    config.security.rateLimitMax ?? 100,
+    config.security.rateLimitWindowMs ?? 60000
+  );
+
+  // Add rate limiting to all requests
+  app.addHook('preHandler', createRateLimitHook(rateLimiter) as never);
+
+  // Add API key authentication (skips health check endpoints)
+  if (config.security.apiKey) {
+    app.addHook('preHandler', createAuthHook(config.security.apiKey) as never);
+    logger.info('API key authentication enabled');
+  }
 
   // Initialize services
   const client = new ShopifyClient(

@@ -4,7 +4,7 @@
  */
 
 import { config as loadEnv } from 'dotenv';
-import { createLogger } from '@nself/plugin-utils';
+import { createLogger, requireWebhookSecret, loadSecurityConfig, type SecurityConfig } from '@nself/plugin-utils';
 
 const logger = createLogger('shopify:config');
 
@@ -24,11 +24,16 @@ export interface ShopifyConfig {
 
   // Sync options
   syncBatchSize: number;
+
+  // Security
+  security: SecurityConfig;
 }
 
 export function loadConfig(overrides: Partial<ShopifyConfig> = {}): ShopifyConfig {
   // Load .env file
   loadEnv();
+
+  const security = loadSecurityConfig('SHOPIFY');
 
   const config: ShopifyConfig = {
     // Shopify credentials
@@ -46,6 +51,9 @@ export function loadConfig(overrides: Partial<ShopifyConfig> = {}): ShopifyConfi
 
     // Sync options
     syncBatchSize: overrides.syncBatchSize ?? parseInt(process.env.SYNC_BATCH_SIZE ?? '250', 10),
+
+    // Security
+    security,
   };
 
   // Validate required fields
@@ -59,6 +67,11 @@ export function loadConfig(overrides: Partial<ShopifyConfig> = {}): ShopifyConfi
     errors.push('SHOPIFY_ACCESS_TOKEN is required');
   }
 
+  // Validate Shopify access token format
+  if (config.shopifyAccessToken && !config.shopifyAccessToken.match(/^shpat_/)) {
+    errors.push('Invalid SHOPIFY_ACCESS_TOKEN format. Expected shpat_*');
+  }
+
   if (!config.databaseUrl) {
     errors.push('DATABASE_URL is required');
   }
@@ -67,6 +80,9 @@ export function loadConfig(overrides: Partial<ShopifyConfig> = {}): ShopifyConfi
     logger.error('Configuration errors', { errors });
     throw new Error(`Configuration invalid:\n  - ${errors.join('\n  - ')}`);
   }
+
+  // Enforce webhook secret in production
+  requireWebhookSecret(config.shopifyWebhookSecret, 'shopify');
 
   // Log loaded config (without secrets)
   logger.debug('Configuration loaded', {

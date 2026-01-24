@@ -3,6 +3,7 @@
  */
 
 import 'dotenv/config';
+import { requireWebhookSecret, loadSecurityConfig, type SecurityConfig } from '@nself/plugin-utils';
 
 export interface Config {
   // Stripe
@@ -25,9 +26,14 @@ export interface Config {
   // Sync
   syncInterval: number;
   logLevel: string;
+
+  // Security
+  security: SecurityConfig;
 }
 
 export function loadConfig(overrides?: Partial<Config>): Config {
+  const security = loadSecurityConfig('STRIPE');
+
   const config: Config = {
     // Stripe
     stripeApiKey: process.env.STRIPE_API_KEY ?? '',
@@ -50,6 +56,9 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     syncInterval: parseInt(process.env.STRIPE_SYNC_INTERVAL ?? '3600', 10),
     logLevel: process.env.LOG_LEVEL ?? 'info',
 
+    // Security
+    security,
+
     // Apply overrides
     ...overrides,
   };
@@ -58,6 +67,14 @@ export function loadConfig(overrides?: Partial<Config>): Config {
   if (!config.stripeApiKey) {
     throw new Error('STRIPE_API_KEY is required');
   }
+
+  // Validate API key format
+  if (!config.stripeApiKey.match(/^(sk_|rk_)(test_|live_)/)) {
+    throw new Error('Invalid STRIPE_API_KEY format. Expected sk_test_*, sk_live_*, rk_test_*, or rk_live_*');
+  }
+
+  // Enforce webhook secret in production
+  requireWebhookSecret(config.stripeWebhookSecret, 'stripe');
 
   return config;
 }

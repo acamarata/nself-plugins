@@ -48,13 +48,20 @@ This document presents the findings from a comprehensive security audit of the n
 4. **No Dynamic Code Execution**: No use of `eval()` or `Function()` constructor
 5. **Soft Deletes**: Data integrity maintained through `deleted_at` timestamps
 
-### Key Concerns
+### Key Concerns (Addressed)
 
-1. **Missing API Authentication**: REST endpoints lack authentication
-2. **Optional Webhook Secrets**: Signature verification bypassed if secrets not configured
-3. **SSL Certificate Validation Disabled**: Database connections vulnerable to MITM
-4. **Information Disclosure**: Error messages leak internal details
-5. **No Rate Limiting**: API endpoints vulnerable to abuse
+The following issues from the original audit have been **resolved**:
+
+1. ~~**Missing API Authentication**~~ **FIXED**: API key authentication now available via `NSELF_API_KEY` or `{PLUGIN}_API_KEY` environment variables
+2. ~~**Optional Webhook Secrets**~~ **FIXED**: Webhook secrets are now mandatory in production (`NODE_ENV=production`)
+3. ~~**No Rate Limiting**~~ **FIXED**: Rate limiting middleware now enabled on all endpoints (configurable via `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS`)
+4. **SSL Certificate Validation Disabled**: Database connections vulnerable to MITM *(Requires manual configuration)*
+5. **Information Disclosure**: Error messages leak internal details *(Partially addressed)*
+
+### Remaining Concerns
+
+1. **SSL Certificate Validation**: Set `POSTGRES_SSL=true` and configure proper certificates
+2. **API Key Storage**: Use environment variables or secrets manager for API keys
 
 ---
 
@@ -64,8 +71,9 @@ This document presents the findings from a comprehensive security audit of the n
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| API Authentication | **Not Implemented** | All REST endpoints are public |
-| Webhook Verification | **Partial** | Works when configured, bypassed if not |
+| API Authentication | **Implemented** | Set `NSELF_API_KEY` or `{PLUGIN}_API_KEY` to enable |
+| Webhook Verification | **Enforced in Production** | Required when `NODE_ENV=production` |
+| Rate Limiting | **Implemented** | 100 req/min default, configurable |
 | Database Authentication | **Implemented** | Uses PostgreSQL credentials |
 | Worker Sync Authentication | **Implemented** | Bearer token required |
 
@@ -517,16 +525,16 @@ location /webhook/stripe {
 
 ### Immediate (Critical - Fix Before Production)
 
-1. **Add API Authentication** to all plugin REST endpoints
-2. **Make Webhook Secrets Mandatory** in production mode
-3. **Enable SSL Certificate Validation** for database connections
+1. ~~**Add API Authentication** to all plugin REST endpoints~~ **DONE** - Set `NSELF_API_KEY` or `{PLUGIN}_API_KEY`
+2. ~~**Make Webhook Secrets Mandatory** in production mode~~ **DONE** - Enforced when `NODE_ENV=production`
+3. **Enable SSL Certificate Validation** for database connections - Set `POSTGRES_SSL=true`
 4. **Fix Timing Attack** in Cloudflare Worker token comparison
 5. **Validate Database Identifiers** against whitelist
 
 ### High Priority (Fix Within 2 Weeks)
 
-6. Add input validation for all path and query parameters
-7. Implement rate limiting on all public endpoints
+6. ~~Add input validation for all path and query parameters~~ **DONE** - Added `shared/src/validation.ts`
+7. ~~Implement rate limiting on all public endpoints~~ **DONE** - 100 req/min default
 8. Fix JSON injection in GitHub workflow
 9. Add webhook payload schema validation
 10. Remove sensitive data from logs

@@ -9,6 +9,7 @@ export * from './database.js';
 export * from './webhook.js';
 export * from './http.js';
 export * from './validation.js';
+export * from './security.js';
 
 // Re-export commonly used items at top level
 export { createLogger, Logger } from './logger.js';
@@ -32,3 +33,13 @@ export {
   validateDatabaseUrl,
   validateId,
 } from './validation.js';
+export {
+  ApiRateLimiter,
+  validateApiKey,
+  extractApiKey,
+  isProduction,
+  requireWebhookSecret,
+  loadSecurityConfig,
+  createAuthHook,
+  createRateLimitHook,
+} from './security.js';
