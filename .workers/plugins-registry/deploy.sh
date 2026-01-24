@@ -101,17 +101,17 @@ authenticate() {
         return 0
     fi
 
-    # Check for credentials file (local development)
-    local creds_file="$SCRIPT_DIR/../../.claude/credentials.env"
+    # Check for local credentials file (create your own .env file with credentials)
+    local creds_file="$SCRIPT_DIR/.env"
     if [[ -f "$creds_file" ]]; then
-        log_info "Found credentials.env, loading Cloudflare credentials..."
+        log_info "Found .env file, loading Cloudflare credentials..."
         # shellcheck source=/dev/null
         source "$creds_file"
 
         if [[ -n "${CLOUDFLARE_API_KEY:-}" ]] && [[ -n "${CLOUDFLARE_EMAIL:-}" ]]; then
             export CLOUDFLARE_API_KEY
             export CLOUDFLARE_EMAIL
-            log_success "Loaded Cloudflare credentials from credentials.env"
+            log_success "Loaded Cloudflare credentials from .env"
             return 0
         fi
     fi

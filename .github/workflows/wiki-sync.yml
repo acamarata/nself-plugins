@@ -18,7 +18,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check if wiki exists
+        id: wiki-check
+        run: |
+          if git ls-remote --exit-code https://github.com/${{ github.repository }}.wiki.git HEAD >/dev/null 2>&1; then
+            echo "wiki_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "wiki_exists=false" >> $GITHUB_OUTPUT
+            echo "::warning::Wiki not initialized. Create a wiki page manually first at https://github.com/${{ github.repository }}/wiki"
+          fi
+
       - name: Checkout wiki
+        if: steps.wiki-check.outputs.wiki_exists == 'true'
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository }}.wiki
@@ -26,6 +37,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Sync docs to wiki
+        if: steps.wiki-check.outputs.wiki_exists == 'true'
         run: |
           # Clear existing wiki content (except .git)
           find wiki -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
@@ -82,6 +94,7 @@ jobs:
           sed -i 's/^          //' wiki/_Footer.md
 
       - name: Push to wiki
+        if: steps.wiki-check.outputs.wiki_exists == 'true'
         run: |
           cd wiki
           git config user.name "github-actions[bot]"

@@ -60,13 +60,13 @@ jobs:
               echo "WARNING: Found 'echo -e' in $script (use printf instead)"
             fi
 
-            # Check for Bash 4+ features
-            if grep -n '\${[^}]*,,}' "$script" | grep -v '^[[:space:]]*#'; then
+            # Check for Bash 4+ features (excluding comments)
+            if grep -n '\${[^}]*,,}' "$script" | grep -v '#.*\${[^}]*,,}'; then
               echo "ERROR: Found Bash 4+ lowercase expansion in $script"
               exit 1
             fi
 
-            if grep -n '\${[^}]*\^\^}' "$script" | grep -v '^[[:space:]]*#'; then
+            if grep -n '\${[^}]*\^\^}' "$script" | grep -v '#.*\${[^}]*\^\^}'; then
               echo "ERROR: Found Bash 4+ uppercase expansion in $script"
               exit 1
             fi
