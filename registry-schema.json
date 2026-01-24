@@ -90,14 +90,68 @@
           "items": { "type": "string" },
           "description": "Webhook events handled by this plugin"
         },
+        "views": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Database views created by this plugin"
+        },
         "actions": {
           "type": "array",
           "items": { "type": "string" },
           "description": "CLI actions provided by this plugin"
         },
+        "implementation": {
+          "type": "object",
+          "properties": {
+            "language": { "type": "string" },
+            "runtime": { "type": "string" },
+            "minNodeVersion": { "type": "string" },
+            "entryPoint": { "type": "string" },
+            "cli": { "type": "string" },
+            "cliName": { "type": "string" },
+            "defaultPort": { "type": "integer" },
+            "packageManager": { "type": "string" },
+            "framework": { "type": "string" }
+          },
+          "description": "Implementation details for the plugin"
+        },
+        "cliCommands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "description"],
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" }
+            }
+          },
+          "description": "CLI commands provided by this plugin"
+        },
+        "apiEndpoints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["method", "path", "description"],
+            "properties": {
+              "method": { "type": "string" },
+              "path": { "type": "string" },
+              "description": { "type": "string" }
+            }
+          },
+          "description": "REST API endpoints provided by this plugin"
+        },
         "envVars": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "required": { "type": "boolean" },
+              "description": { "type": "string" },
+              "default": { "type": "string" }
+            }
+          },
           "description": "Environment variables used by this plugin"
         },
         "dependencies": {
