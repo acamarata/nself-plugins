@@ -61,9 +61,47 @@ export async function createServer(config: ShopifyConfig): Promise<ShopifyServer
     }
   );
 
-  // Health check
+  // Health check endpoint (basic liveness)
   app.get('/health', async () => {
-    return { status: 'ok', service: 'shopify-plugin' };
+    return { status: 'ok', plugin: 'shopify', timestamp: new Date().toISOString() };
+  });
+
+  // Readiness check (verifies database connectivity)
+  app.get('/ready', async (_request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      await db.query('SELECT 1');
+      return { ready: true, plugin: 'shopify', timestamp: new Date().toISOString() };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Database unavailable';
+      logger.error('Readiness check failed', { error: message });
+      return reply.status(503).send({
+        ready: false,
+        plugin: 'shopify',
+        error: 'Database unavailable',
+        timestamp: new Date().toISOString(),
+      });
+    }
+  });
+
+  // Liveness check (application state with sync info)
+  app.get('/live', async () => {
+    const stats = await db.getStats();
+    const shop = await db.getShop();
+    return {
+      alive: true,
+      plugin: 'shopify',
+      version: '1.0.0',
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      shop: shop ? { name: shop.name, domain: shop.domain } : null,
+      stats: {
+        products: stats.products,
+        customers: stats.customers,
+        orders: stats.orders,
+        lastSync: stats.lastSyncedAt,
+      },
+      timestamp: new Date().toISOString(),
+    };
   });
 
   // Webhook endpoint

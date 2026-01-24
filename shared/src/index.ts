@@ -8,6 +8,7 @@ export * from './logger.js';
 export * from './database.js';
 export * from './webhook.js';
 export * from './http.js';
+export * from './validation.js';
 
 // Re-export commonly used items at top level
 export { createLogger, Logger } from './logger.js';
@@ -22,3 +23,12 @@ export {
   WebhookProcessor,
   withRetry,
 } from './webhook.js';
+export {
+  validatePagination,
+  validatePort,
+  validatePositiveInt,
+  validateEnum,
+  validateApiKeyFormat,
+  validateDatabaseUrl,
+  validateId,
+} from './validation.js';
