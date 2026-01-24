@@ -1,0 +1,68 @@
+{
+  "name": "shopify",
+  "version": "1.0.0",
+  "description": "Shopify store, orders, and product synchronization",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/shopify",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "ecommerce",
+  "tags": ["shopify", "ecommerce", "orders", "products", "inventory"],
+
+  "tables": [
+    "shopify_shops",
+    "shopify_products",
+    "shopify_variants",
+    "shopify_collections",
+    "shopify_customers",
+    "shopify_orders",
+    "shopify_order_items",
+    "shopify_inventory",
+    "shopify_webhook_events"
+  ],
+
+  "webhooks": {
+    "orders/create": "New order placed",
+    "orders/updated": "Order updated",
+    "orders/paid": "Order payment received",
+    "orders/fulfilled": "Order fulfilled",
+    "orders/cancelled": "Order cancelled",
+    "products/create": "Product created",
+    "products/update": "Product updated",
+    "products/delete": "Product deleted",
+    "customers/create": "Customer registered",
+    "customers/update": "Customer updated",
+    "inventory_levels/update": "Inventory changed",
+    "refunds/create": "Refund issued",
+    "fulfillments/create": "Fulfillment created"
+  },
+
+  "actions": {
+    "sync": "Sync store data",
+    "products": "List and manage products",
+    "orders": "View and manage orders",
+    "customers": "View customers",
+    "inventory": "Check inventory levels",
+    "webhook": "Manage webhook events"
+  },
+
+  "envVars": {
+    "required": [
+      "SHOPIFY_STORE",
+      "SHOPIFY_ACCESS_TOKEN"
+    ],
+    "optional": [
+      "SHOPIFY_API_VERSION",
+      "SHOPIFY_WEBHOOK_SECRET",
+      "SHOPIFY_SYNC_INTERVAL"
+    ]
+  },
+
+  "config": {
+    "apiVersion": "2024-01",
+    "webhookPath": "/webhooks/shopify",
+    "syncInterval": 3600,
+    "rateLimit": 2
+  }
+}

@@ -1,0 +1,325 @@
+{
+  "$schema": "./registry-schema.json",
+  "version": "1.0.0",
+  "lastUpdated": "2026-01-24T12:00:00Z",
+  "plugins": {
+    "stripe": {
+      "name": "stripe",
+      "version": "1.0.0",
+      "description": "Stripe billing data sync with webhook handling",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/stripe",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/stripe",
+      "minNselfVersion": "0.4.8",
+      "category": "billing",
+      "tags": ["payments", "billing", "subscriptions", "stripe"],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-stripe",
+        "defaultPort": 3001,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "stripe_customers",
+        "stripe_products",
+        "stripe_prices",
+        "stripe_subscriptions",
+        "stripe_invoices",
+        "stripe_payment_intents",
+        "stripe_payment_methods",
+        "stripe_webhook_events"
+      ],
+      "views": [
+        "stripe_active_subscriptions",
+        "stripe_mrr",
+        "stripe_failed_payments"
+      ],
+      "webhooks": [
+        "customer.created",
+        "customer.updated",
+        "customer.deleted",
+        "product.created",
+        "product.updated",
+        "product.deleted",
+        "price.created",
+        "price.updated",
+        "price.deleted",
+        "subscription.created",
+        "subscription.updated",
+        "subscription.deleted",
+        "invoice.created",
+        "invoice.updated",
+        "invoice.paid",
+        "invoice.payment_failed",
+        "invoice.finalized",
+        "payment_intent.created",
+        "payment_intent.succeeded",
+        "payment_intent.payment_failed",
+        "payment_intent.canceled",
+        "payment_method.attached",
+        "payment_method.detached",
+        "payment_method.updated"
+      ],
+      "cliCommands": [
+        {"name": "sync", "description": "Sync all Stripe data to database"},
+        {"name": "server", "description": "Start the webhook server"},
+        {"name": "init", "description": "Initialize database schema"},
+        {"name": "status", "description": "Show sync status and statistics"},
+        {"name": "customers", "description": "List customers"},
+        {"name": "subscriptions", "description": "List subscriptions"},
+        {"name": "invoices", "description": "List invoices"},
+        {"name": "products", "description": "List products"},
+        {"name": "prices", "description": "List prices"}
+      ],
+      "apiEndpoints": [
+        {"method": "POST", "path": "/webhook", "description": "Stripe webhook receiver"},
+        {"method": "POST", "path": "/api/sync", "description": "Trigger data sync"},
+        {"method": "GET", "path": "/api/status", "description": "Get sync status"},
+        {"method": "GET", "path": "/api/customers", "description": "List customers"},
+        {"method": "GET", "path": "/api/subscriptions", "description": "List subscriptions"},
+        {"method": "GET", "path": "/api/invoices", "description": "List invoices"},
+        {"method": "GET", "path": "/api/products", "description": "List products"},
+        {"method": "GET", "path": "/api/mrr", "description": "Get MRR summary"}
+      ],
+      "envVars": [
+        {"name": "STRIPE_API_KEY", "required": true, "description": "Stripe API secret key"},
+        {"name": "STRIPE_WEBHOOK_SECRET", "required": false, "description": "Webhook signing secret"},
+        {"name": "DATABASE_URL", "required": true, "description": "PostgreSQL connection string"},
+        {"name": "PORT", "required": false, "default": "3001", "description": "Server port"},
+        {"name": "HOST", "required": false, "default": "0.0.0.0", "description": "Server host"}
+      ],
+      "dependencies": ["pg", "stripe", "fastify", "commander"],
+      "checksums": {"sha256": ""}
+    },
+    "github": {
+      "name": "github",
+      "version": "1.0.0",
+      "description": "GitHub repository, issue, and workflow integration",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/github",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/github",
+      "minNselfVersion": "0.4.8",
+      "category": "devops",
+      "tags": ["github", "git", "ci", "devops", "issues", "pull-requests"],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-github",
+        "defaultPort": 3002,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "github_repositories",
+        "github_issues",
+        "github_pull_requests",
+        "github_commits",
+        "github_releases",
+        "github_workflow_runs",
+        "github_deployments",
+        "github_webhook_events"
+      ],
+      "views": [
+        "github_open_items",
+        "github_recent_activity",
+        "github_workflow_stats"
+      ],
+      "webhooks": [
+        "push",
+        "pull_request",
+        "pull_request_review",
+        "issues",
+        "issue_comment",
+        "workflow_run",
+        "release",
+        "deployment",
+        "deployment_status",
+        "create",
+        "delete",
+        "repository"
+      ],
+      "cliCommands": [
+        {"name": "sync", "description": "Sync all GitHub data to database"},
+        {"name": "server", "description": "Start the webhook server"},
+        {"name": "init", "description": "Initialize database schema"},
+        {"name": "status", "description": "Show sync status and statistics"},
+        {"name": "repos", "description": "List repositories"},
+        {"name": "issues", "description": "List issues"},
+        {"name": "prs", "description": "List pull requests"}
+      ],
+      "apiEndpoints": [
+        {"method": "POST", "path": "/webhook", "description": "GitHub webhook receiver"},
+        {"method": "POST", "path": "/api/sync", "description": "Trigger data sync"},
+        {"method": "GET", "path": "/api/status", "description": "Get sync status"},
+        {"method": "GET", "path": "/api/repositories", "description": "List repositories"},
+        {"method": "GET", "path": "/api/issues", "description": "List issues"},
+        {"method": "GET", "path": "/api/pull-requests", "description": "List pull requests"},
+        {"method": "GET", "path": "/api/commits", "description": "List commits"},
+        {"method": "GET", "path": "/api/releases", "description": "List releases"}
+      ],
+      "envVars": [
+        {"name": "GITHUB_TOKEN", "required": true, "description": "GitHub personal access token"},
+        {"name": "GITHUB_WEBHOOK_SECRET", "required": false, "description": "Webhook signing secret"},
+        {"name": "GITHUB_ORG", "required": false, "description": "GitHub organization to sync"},
+        {"name": "GITHUB_REPOS", "required": false, "description": "Comma-separated list of repos"},
+        {"name": "DATABASE_URL", "required": true, "description": "PostgreSQL connection string"},
+        {"name": "PORT", "required": false, "default": "3002", "description": "Server port"},
+        {"name": "HOST", "required": false, "default": "0.0.0.0", "description": "Server host"}
+      ],
+      "dependencies": ["pg", "@octokit/rest", "@octokit/webhooks", "fastify", "commander"],
+      "checksums": {"sha256": ""}
+    },
+    "shopify": {
+      "name": "shopify",
+      "version": "1.0.0",
+      "description": "Shopify store, orders, and product synchronization",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/shopify",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/shopify",
+      "minNselfVersion": "0.4.8",
+      "category": "ecommerce",
+      "tags": ["shopify", "ecommerce", "orders", "products", "inventory"],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-shopify",
+        "defaultPort": 3003,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "shopify_shops",
+        "shopify_products",
+        "shopify_variants",
+        "shopify_collections",
+        "shopify_customers",
+        "shopify_orders",
+        "shopify_order_items",
+        "shopify_inventory",
+        "shopify_webhook_events"
+      ],
+      "views": [
+        "shopify_sales_overview",
+        "shopify_top_products",
+        "shopify_low_inventory",
+        "shopify_customer_value"
+      ],
+      "webhooks": [
+        "orders/create",
+        "orders/updated",
+        "orders/paid",
+        "orders/fulfilled",
+        "orders/cancelled",
+        "orders/delete",
+        "products/create",
+        "products/update",
+        "products/delete",
+        "customers/create",
+        "customers/update",
+        "customers/delete",
+        "inventory_levels/update",
+        "inventory_levels/connect",
+        "inventory_levels/disconnect",
+        "fulfillments/create",
+        "fulfillments/update",
+        "refunds/create",
+        "collections/create",
+        "collections/update",
+        "collections/delete",
+        "shop/update"
+      ],
+      "cliCommands": [
+        {"name": "sync", "description": "Sync all Shopify data to database"},
+        {"name": "server", "description": "Start the webhook server"},
+        {"name": "init", "description": "Initialize database schema"},
+        {"name": "status", "description": "Show sync status and statistics"},
+        {"name": "products", "description": "List products"},
+        {"name": "customers", "description": "List customers"},
+        {"name": "orders", "description": "List orders"},
+        {"name": "collections", "description": "List collections"},
+        {"name": "inventory", "description": "List inventory levels"},
+        {"name": "webhooks", "description": "List recent webhook events"},
+        {"name": "analytics", "description": "Show analytics summary"}
+      ],
+      "apiEndpoints": [
+        {"method": "POST", "path": "/webhook", "description": "Shopify webhook receiver"},
+        {"method": "POST", "path": "/api/sync", "description": "Trigger data sync"},
+        {"method": "GET", "path": "/api/status", "description": "Get sync status"},
+        {"method": "GET", "path": "/api/shop", "description": "Get shop info"},
+        {"method": "GET", "path": "/api/products", "description": "List products"},
+        {"method": "GET", "path": "/api/customers", "description": "List customers"},
+        {"method": "GET", "path": "/api/orders", "description": "List orders"},
+        {"method": "GET", "path": "/api/collections", "description": "List collections"},
+        {"method": "GET", "path": "/api/inventory", "description": "List inventory"},
+        {"method": "GET", "path": "/api/analytics/daily-sales", "description": "Get daily sales"},
+        {"method": "GET", "path": "/api/analytics/top-products", "description": "Get top products"},
+        {"method": "GET", "path": "/api/analytics/customer-value", "description": "Get top customers by value"}
+      ],
+      "envVars": [
+        {"name": "SHOPIFY_SHOP_DOMAIN", "required": true, "description": "Shopify shop domain (e.g., myshop.myshopify.com)"},
+        {"name": "SHOPIFY_ACCESS_TOKEN", "required": true, "description": "Shopify Admin API access token"},
+        {"name": "SHOPIFY_API_VERSION", "required": false, "default": "2024-01", "description": "Shopify API version"},
+        {"name": "SHOPIFY_WEBHOOK_SECRET", "required": false, "description": "Webhook signing secret"},
+        {"name": "DATABASE_URL", "required": true, "description": "PostgreSQL connection string"},
+        {"name": "PORT", "required": false, "default": "3003", "description": "Server port"},
+        {"name": "HOST", "required": false, "default": "0.0.0.0", "description": "Server host"}
+      ],
+      "dependencies": ["pg", "@shopify/shopify-api", "fastify", "commander"],
+      "checksums": {"sha256": ""}
+    }
+  },
+  "categories": {
+    "billing": {
+      "name": "Billing & Payments",
+      "description": "Payment processing, subscriptions, and billing management",
+      "icon": "credit-card"
+    },
+    "ecommerce": {
+      "name": "E-Commerce",
+      "description": "Online store and product management integrations",
+      "icon": "shopping-cart"
+    },
+    "devops": {
+      "name": "DevOps & Development",
+      "description": "Development tools, CI/CD, and version control integrations",
+      "icon": "code"
+    },
+    "productivity": {
+      "name": "Productivity",
+      "description": "Project management, documentation, and team collaboration",
+      "icon": "clipboard"
+    },
+    "communication": {
+      "name": "Communication",
+      "description": "Email, chat, and customer support integrations",
+      "icon": "message"
+    },
+    "analytics": {
+      "name": "Analytics & Data",
+      "description": "Analytics, data warehouses, and business intelligence",
+      "icon": "chart"
+    },
+    "finance": {
+      "name": "Finance",
+      "description": "Banking, accounting, and financial data integrations",
+      "icon": "dollar"
+    }
+  }
+}

@@ -1,0 +1,111 @@
+name: Validate Plugins
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'plugins/**'
+      - 'shared/**'
+  pull_request:
+    paths:
+      - 'plugins/**'
+      - 'shared/**'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate plugin.json files
+        run: |
+          echo "Validating plugin manifests..."
+
+          for manifest in plugins/*/plugin.json; do
+            if [ -f "$manifest" ]; then
+              echo "Checking: $manifest"
+
+              # Check JSON validity
+              if ! jq empty "$manifest" 2>/dev/null; then
+                echo "ERROR: Invalid JSON in $manifest"
+                exit 1
+              fi
+
+              # Check required fields
+              for field in name version description minNselfVersion; do
+                if ! jq -e ".$field" "$manifest" >/dev/null 2>&1; then
+                  echo "ERROR: Missing required field '$field' in $manifest"
+                  exit 1
+                fi
+              done
+
+              echo "  Valid"
+            fi
+          done
+
+          echo "All plugin manifests valid!"
+
+      - name: Check shell scripts
+        run: |
+          echo "Checking shell scripts..."
+
+          # Find all .sh files
+          find plugins shared -name "*.sh" -type f | while read -r script; do
+            echo "Checking: $script"
+
+            # Check for echo -e (not portable)
+            if grep -n 'echo -e' "$script" | grep -v '^[[:space:]]*#'; then
+              echo "WARNING: Found 'echo -e' in $script (use printf instead)"
+            fi
+
+            # Check for Bash 4+ features
+            if grep -n '\${[^}]*,,}' "$script" | grep -v '^[[:space:]]*#'; then
+              echo "ERROR: Found Bash 4+ lowercase expansion in $script"
+              exit 1
+            fi
+
+            if grep -n '\${[^}]*\^\^}' "$script" | grep -v '^[[:space:]]*#'; then
+              echo "ERROR: Found Bash 4+ uppercase expansion in $script"
+              exit 1
+            fi
+          done
+
+          echo "Shell script checks passed!"
+
+      - name: Validate SQL syntax
+        run: |
+          echo "Checking SQL files..."
+
+          for sql in plugins/*/schema/*.sql; do
+            if [ -f "$sql" ]; then
+              echo "Checking: $sql"
+
+              # Basic syntax validation - check for common issues
+              if grep -n 'CREATE TABLE [^(]*;' "$sql" | grep -v '^[[:space:]]*--'; then
+                echo "WARNING: Possible incomplete CREATE TABLE in $sql"
+              fi
+            fi
+          done
+
+          echo "SQL checks passed!"
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Run ShellCheck
+        run: |
+          echo "Running ShellCheck..."
+
+          # Find all shell scripts and check them
+          find plugins shared -name "*.sh" -type f -print0 | \
+            xargs -0 shellcheck -S error || true
+
+          echo "ShellCheck complete!"

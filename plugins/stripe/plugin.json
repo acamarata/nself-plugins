@@ -1,0 +1,82 @@
+{
+  "name": "stripe",
+  "version": "1.0.0",
+  "description": "Stripe billing data sync with webhook handling",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/stripe",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "billing",
+  "tags": ["payments", "billing", "subscriptions", "stripe", "webhooks"],
+
+  "tables": [
+    "stripe_customers",
+    "stripe_products",
+    "stripe_prices",
+    "stripe_subscriptions",
+    "stripe_invoices",
+    "stripe_payment_intents",
+    "stripe_payment_methods",
+    "stripe_webhook_events"
+  ],
+
+  "webhooks": {
+    "customer.created": "Sync new customer to database",
+    "customer.updated": "Update customer data",
+    "customer.deleted": "Mark customer as deleted",
+    "product.created": "Sync new product",
+    "product.updated": "Update product data",
+    "price.created": "Sync new price",
+    "price.updated": "Update price data",
+    "subscription.created": "Track new subscription",
+    "subscription.updated": "Update subscription status",
+    "subscription.deleted": "Handle subscription cancellation",
+    "invoice.created": "Record new invoice",
+    "invoice.paid": "Mark invoice as paid",
+    "invoice.payment_failed": "Handle failed payment",
+    "payment_intent.succeeded": "Record successful payment",
+    "payment_intent.payment_failed": "Handle payment failure",
+    "payment_method.attached": "Link payment method to customer",
+    "payment_method.detached": "Unlink payment method"
+  },
+
+  "actions": {
+    "sync": "Sync all Stripe data to database",
+    "customers": "Manage customer data",
+    "subscriptions": "View and manage subscriptions",
+    "invoices": "View invoice history",
+    "webhook": "Manage webhook endpoint"
+  },
+
+  "envVars": {
+    "required": [
+      "STRIPE_API_KEY"
+    ],
+    "optional": [
+      "STRIPE_WEBHOOK_SECRET",
+      "STRIPE_SYNC_INTERVAL",
+      "STRIPE_API_VERSION"
+    ]
+  },
+
+  "config": {
+    "syncInterval": 3600,
+    "apiVersion": "2024-12-18.acacia",
+    "webhookPath": "/webhooks/stripe",
+    "retryAttempts": 3,
+    "retryDelay": 1000
+  },
+
+  "hooks": {
+    "postInstall": "install.sh",
+    "preUninstall": "uninstall.sh",
+    "postSync": null
+  },
+
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": ["stripe.com"],
+    "filesystem": ["logs", "cache"]
+  }
+}

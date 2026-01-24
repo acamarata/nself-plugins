@@ -1,0 +1,46 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Cache
+.cache/
+cache/
+
+# Temp files
+*.tmp
+*.temp
+tmp/
+
+# Environment files (should not be committed)
+.env
+.env.local
+.env.*.local
+
+# Test output
+coverage/
+test-results/
+
+# Build artifacts
+dist/
+build/
+
+# Node modules (if any tooling uses npm)
+node_modules/
+
+# Claude Code private directory (contains credentials)
+.claude/
+
+# Task tracking files
+todo.md
+TODO.md

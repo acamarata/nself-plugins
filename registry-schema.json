@@ -1,0 +1,135 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "nself Plugin Registry Schema",
+  "type": "object",
+  "required": ["version", "plugins"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Registry schema version"
+    },
+    "lastUpdated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last time the registry was updated"
+    },
+    "plugins": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/plugin"
+      }
+    },
+    "categories": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/category"
+      }
+    }
+  },
+  "definitions": {
+    "plugin": {
+      "type": "object",
+      "required": ["name", "version", "description", "path", "minNselfVersion"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Plugin identifier (lowercase, alphanumeric with hyphens)"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+",
+          "description": "Semantic version"
+        },
+        "description": {
+          "type": "string",
+          "description": "Short description of the plugin"
+        },
+        "author": {
+          "type": "string",
+          "description": "Plugin author or organization"
+        },
+        "license": {
+          "type": "string",
+          "description": "License identifier"
+        },
+        "homepage": {
+          "type": "string",
+          "format": "uri",
+          "description": "Plugin homepage URL"
+        },
+        "repository": {
+          "type": "string",
+          "format": "uri",
+          "description": "Source repository URL"
+        },
+        "path": {
+          "type": "string",
+          "description": "Path to plugin directory within repository"
+        },
+        "minNselfVersion": {
+          "type": "string",
+          "description": "Minimum required nself version"
+        },
+        "category": {
+          "type": "string",
+          "description": "Plugin category identifier"
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Searchable tags"
+        },
+        "tables": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Database tables created by this plugin"
+        },
+        "webhooks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Webhook events handled by this plugin"
+        },
+        "actions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "CLI actions provided by this plugin"
+        },
+        "envVars": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Environment variables used by this plugin"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Other plugins this plugin depends on"
+        },
+        "checksums": {
+          "type": "object",
+          "properties": {
+            "sha256": { "type": "string" }
+          }
+        }
+      }
+    },
+    "category": {
+      "type": "object",
+      "required": ["name", "description"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Display name for the category"
+        },
+        "description": {
+          "type": "string",
+          "description": "Category description"
+        },
+        "icon": {
+          "type": "string",
+          "description": "Icon identifier"
+        }
+      }
+    }
+  }
+}

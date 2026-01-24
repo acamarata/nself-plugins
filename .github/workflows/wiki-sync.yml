@@ -1,0 +1,95 @@
+name: Sync Wiki
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout wiki
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync docs to wiki
+        run: |
+          # Clear existing wiki content (except .git)
+          find wiki -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+
+          # Copy docs to wiki
+          cp -r docs/* wiki/
+
+          # Rename PLANNED.md to Planned-Plugins.md for wiki
+          if [ -f wiki/PLANNED.md ]; then
+            mv wiki/PLANNED.md wiki/Planned-Plugins.md
+          fi
+
+          # Rename DEVELOPMENT.md to Plugin-Development.md for wiki
+          if [ -f wiki/DEVELOPMENT.md ]; then
+            mv wiki/DEVELOPMENT.md wiki/Plugin-Development.md
+          fi
+
+          # Rename CONTRIBUTING.md to Contributing.md for wiki
+          if [ -f wiki/CONTRIBUTING.md ]; then
+            mv wiki/CONTRIBUTING.md wiki/Contributing.md
+          fi
+
+          # Create _Sidebar.md for wiki navigation
+          cat > wiki/_Sidebar.md << 'SIDEBAR_EOF'
+          ### Navigation
+
+          - [[Home]]
+          - [[Installation]]
+          - [[Planned Plugins|Planned-Plugins]]
+
+          ### Plugins
+
+          - [[Stripe|plugins/Stripe]]
+          - [[GitHub|plugins/GitHub]]
+          - [[Shopify|plugins/Shopify]]
+
+          ### Development
+
+          - [[Plugin Development|Plugin-Development]]
+          - [[TypeScript Guide|TYPESCRIPT_PLUGIN_GUIDE]]
+          - [[Contributing]]
+          SIDEBAR_EOF
+
+          # Remove leading spaces from sidebar
+          sed -i 's/^          //' wiki/_Sidebar.md
+
+          # Create _Footer.md
+          cat > wiki/_Footer.md << 'FOOTER_EOF'
+          ---
+          [nself](https://github.com/acamarata/nself) | [Plugins](https://github.com/acamarata/nself-plugins) | [Issues](https://github.com/acamarata/nself-plugins/issues)
+          FOOTER_EOF
+
+          # Remove leading spaces from footer
+          sed -i 's/^          //' wiki/_Footer.md
+
+      - name: Push to wiki
+        run: |
+          cd wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Sync docs to wiki"
+            git push
+          fi

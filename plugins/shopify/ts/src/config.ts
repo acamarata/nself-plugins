@@ -1,0 +1,86 @@
+/**
+ * Shopify Plugin Configuration
+ * Load and validate configuration from environment variables
+ */
+
+import { config as loadEnv } from 'dotenv';
+import { createLogger } from '@nself/plugin-utils';
+
+const logger = createLogger('shopify:config');
+
+export interface ShopifyConfig {
+  // Shopify credentials
+  shopifyShopDomain: string;
+  shopifyAccessToken: string;
+  shopifyApiVersion: string;
+  shopifyWebhookSecret: string;
+
+  // Database
+  databaseUrl: string;
+
+  // Server
+  port: number;
+  host: string;
+
+  // Sync options
+  syncBatchSize: number;
+}
+
+export function loadConfig(overrides: Partial<ShopifyConfig> = {}): ShopifyConfig {
+  // Load .env file
+  loadEnv();
+
+  const config: ShopifyConfig = {
+    // Shopify credentials
+    shopifyShopDomain: overrides.shopifyShopDomain ?? process.env.SHOPIFY_SHOP_DOMAIN ?? '',
+    shopifyAccessToken: overrides.shopifyAccessToken ?? process.env.SHOPIFY_ACCESS_TOKEN ?? '',
+    shopifyApiVersion: overrides.shopifyApiVersion ?? process.env.SHOPIFY_API_VERSION ?? '2024-01',
+    shopifyWebhookSecret: overrides.shopifyWebhookSecret ?? process.env.SHOPIFY_WEBHOOK_SECRET ?? '',
+
+    // Database
+    databaseUrl: overrides.databaseUrl ?? process.env.DATABASE_URL ?? '',
+
+    // Server
+    port: overrides.port ?? parseInt(process.env.PORT ?? '3003', 10),
+    host: overrides.host ?? process.env.HOST ?? '0.0.0.0',
+
+    // Sync options
+    syncBatchSize: overrides.syncBatchSize ?? parseInt(process.env.SYNC_BATCH_SIZE ?? '250', 10),
+  };
+
+  // Validate required fields
+  const errors: string[] = [];
+
+  if (!config.shopifyShopDomain) {
+    errors.push('SHOPIFY_SHOP_DOMAIN is required');
+  }
+
+  if (!config.shopifyAccessToken) {
+    errors.push('SHOPIFY_ACCESS_TOKEN is required');
+  }
+
+  if (!config.databaseUrl) {
+    errors.push('DATABASE_URL is required');
+  }
+
+  if (errors.length > 0) {
+    logger.error('Configuration errors', { errors });
+    throw new Error(`Configuration invalid:\n  - ${errors.join('\n  - ')}`);
+  }
+
+  // Log loaded config (without secrets)
+  logger.debug('Configuration loaded', {
+    shopDomain: config.shopifyShopDomain,
+    apiVersion: config.shopifyApiVersion,
+    port: config.port,
+    host: config.host,
+    hasWebhookSecret: !!config.shopifyWebhookSecret,
+  });
+
+  return config;
+}
+
+export function getShopName(shopDomain: string): string {
+  // Extract shop name from domain (e.g., "myshop.myshopify.com" -> "myshop")
+  return shopDomain.replace('.myshopify.com', '');
+}
