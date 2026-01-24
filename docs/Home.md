@@ -11,6 +11,7 @@ Welcome to the official nself plugins documentation. This wiki provides comprehe
 - [Architecture Overview](#architecture-overview)
 - [Getting Started](#getting-started)
 - [Plugin Commands](#plugin-commands)
+- [Security](#security)
 - [Support](#support)
 
 ---
@@ -356,6 +357,33 @@ nself-shopify orders list
 
 ---
 
+## Security
+
+nself plugins are designed with security in mind. All plugins implement:
+
+- **Webhook Signature Verification**: HMAC-SHA256 validation for all incoming webhooks
+- **Parameterized SQL Queries**: Protection against SQL injection attacks
+- **Type-Safe Operations**: Full TypeScript implementation with strict typing
+- **Secure Credential Handling**: Environment-based configuration, no hardcoded secrets
+
+### Security Documentation
+
+For detailed security information, including deployment best practices and our security audit:
+
+- **[Security Audit Report](Security.md)** - Comprehensive security assessment with findings and recommendations
+- **[Deployment Security](Security.md#deployment-security)** - Production deployment guidelines
+- **[Security Checklist](Security.md#security-checklist)** - Pre-deployment and operational checklists
+
+### Reporting Security Issues
+
+If you discover a security vulnerability:
+
+1. **Do NOT** open a public GitHub issue
+2. Email security concerns to the maintainers directly
+3. Allow 90 days for remediation before public disclosure
+
+---
+
 ## Support
 
 ### Documentation
@@ -364,6 +392,7 @@ nself-shopify orders list
 - [Plugin Development](DEVELOPMENT.md) - Create your own plugins
 - [TypeScript Guide](TYPESCRIPT_PLUGIN_GUIDE.md) - TypeScript plugin development
 - [Contributing](CONTRIBUTING.md) - How to contribute
+- [Security Audit](Security.md) - Security assessment and best practices
 
 ### Getting Help
 
