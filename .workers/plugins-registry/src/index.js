@@ -196,13 +196,13 @@ async function handlePluginInfo(path, env) {
     });
   }
 
-  // Find plugin
-  const plugin = registry.plugins.find(p => p.name === pluginName);
+  // Find plugin (plugins is an object keyed by name)
+  const plugin = registry.plugins[pluginName];
 
   if (!plugin) {
     return new Response(JSON.stringify({
       error: 'Plugin not found',
-      available: registry.plugins.map(p => p.name)
+      available: Object.keys(registry.plugins)
     }), {
       status: 404,
       headers: { 'Content-Type': 'application/json', ...corsHeaders }
@@ -284,7 +284,7 @@ async function handleCategories(env) {
     registry = await fetchFromGitHub(env);
   }
 
-  const categories = registry?.categories || [];
+  const categories = registry?.categories || {};
 
   return new Response(JSON.stringify({ categories }), {
     headers: { 'Content-Type': 'application/json', ...corsHeaders }
@@ -338,7 +338,7 @@ async function handleSync(request, env, ctx) {
   return new Response(JSON.stringify({
     success: true,
     message: 'Registry synced',
-    pluginCount: registry.plugins?.length || 0,
+    pluginCount: Object.keys(registry.plugins || {}).length,
     timestamp: new Date().toISOString()
   }), {
     headers: { 'Content-Type': 'application/json', ...corsHeaders }
