@@ -20,7 +20,8 @@ uninstall_idme_plugin() {
 
     # Prompt for data deletion
     plugin_warn "This will remove all ID.me verification data from the database."
-    read -p "Are you sure you want to continue? (yes/no): " confirm
+    printf "Are you sure you want to continue? (yes/no): "
+    read -r confirm
 
     if [[ "$confirm" != "yes" ]]; then
         plugin_info "Uninstall cancelled."
@@ -47,7 +48,8 @@ uninstall_idme_plugin() {
     plugin_db_query "DELETE FROM plugin_migrations WHERE plugin_name = 'idme';" || true
 
     # Remove cache and logs (optional)
-    read -p "Remove cached data and logs? (yes/no): " remove_cache
+    printf "Remove cached data and logs? (yes/no): "
+    read -r remove_cache
     if [[ "$remove_cache" == "yes" ]]; then
         rm -rf "${HOME}/.nself/cache/plugins/idme"
         rm -rf "${HOME}/.nself/logs/plugins/idme"

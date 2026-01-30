@@ -37,12 +37,12 @@ export function loadConfig(overrides?: Partial<JobsConfig>): JobsConfig {
 
     // Database
     database: {
-      host: process.env.DB_HOST || process.env.POSTGRES_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || process.env.POSTGRES_PORT || '5432', 10),
-      database: process.env.DB_NAME || process.env.POSTGRES_DB || 'nself',
-      user: process.env.DB_USER || process.env.POSTGRES_USER || 'postgres',
-      password: process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || '',
-      ssl: process.env.DB_SSL === 'true',
+      host: process.env.POSTGRES_HOST ?? 'localhost',
+      port: parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
+      database: process.env.POSTGRES_DB ?? 'nself',
+      user: process.env.POSTGRES_USER ?? 'postgres',
+      password: process.env.POSTGRES_PASSWORD ?? '',
+      ssl: process.env.POSTGRES_SSL === 'true',
     },
 
     ...overrides,
@@ -63,11 +63,11 @@ export function validateConfig(config: JobsConfig): void {
   }
 
   if (!config.database.host) {
-    errors.push('DB_HOST or POSTGRES_HOST is required');
+    errors.push('POSTGRES_HOST is required');
   }
 
   if (!config.database.database) {
-    errors.push('DB_NAME or POSTGRES_DB is required');
+    errors.push('POSTGRES_DB is required');
   }
 
   // Validate ranges

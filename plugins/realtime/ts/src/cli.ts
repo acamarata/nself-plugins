@@ -20,7 +20,14 @@ program
   .description('Initialize realtime server and database')
   .action(async () => {
     try {
-      const db = new Database(config.databaseUrl);
+      const db = new Database({
+  host: config.databaseHost,
+  port: config.databasePort,
+  database: config.databaseName,
+  user: config.databaseUser,
+  password: config.databasePassword,
+  ssl: config.databaseSsl,
+});
 
       console.log('Creating default rooms...');
       await db.createRoom({ name: 'general', type: 'channel', visibility: 'public' });
@@ -44,7 +51,14 @@ program
   .description('Show server statistics')
   .action(async () => {
     try {
-      const db = new Database(config.databaseUrl);
+      const db = new Database({
+  host: config.databaseHost,
+  port: config.databasePort,
+  database: config.databaseName,
+  user: config.databaseUser,
+  password: config.databasePassword,
+  ssl: config.databaseSsl,
+});
       const stats = await db.getStats();
 
       console.log('\nRealtime Server Statistics');
@@ -74,7 +88,14 @@ program
   .description('List all rooms')
   .action(async () => {
     try {
-      const db = new Database(config.databaseUrl);
+      const db = new Database({
+  host: config.databaseHost,
+  port: config.databasePort,
+  database: config.databaseName,
+  user: config.databaseUser,
+  password: config.databasePassword,
+  ssl: config.databaseSsl,
+});
       const rooms = await db.getAllRooms();
 
       console.log('\nActive Rooms');
@@ -106,7 +127,14 @@ program
   .option('-v, --visibility <visibility>', 'Room visibility', 'public')
   .action(async (name, options) => {
     try {
-      const db = new Database(config.databaseUrl);
+      const db = new Database({
+  host: config.databaseHost,
+  port: config.databasePort,
+  database: config.databaseName,
+  user: config.databaseUser,
+  password: config.databasePassword,
+  ssl: config.databaseSsl,
+});
       const room = await db.createRoom({
         name,
         type: options.type,
@@ -129,7 +157,14 @@ program
   .description('List active connections')
   .action(async () => {
     try {
-      const db = new Database(config.databaseUrl);
+      const db = new Database({
+  host: config.databaseHost,
+  port: config.databasePort,
+  database: config.databaseName,
+  user: config.databaseUser,
+  password: config.databasePassword,
+  ssl: config.databaseSsl,
+});
       const connections = await db.getActiveConnections();
 
       console.log('\nActive Connections');
@@ -164,7 +199,14 @@ program
   .option('-n, --number <number>', 'Number of events to show', '20')
   .action(async (options) => {
     try {
-      const db = new Database(config.databaseUrl);
+      const db = new Database({
+  host: config.databaseHost,
+  port: config.databasePort,
+  database: config.databaseName,
+  user: config.databaseUser,
+  password: config.databasePassword,
+  ssl: config.databaseSsl,
+});
       const events = await db.getRecentEvents(parseInt(options.number, 10));
 
       console.log('\nRecent Events');

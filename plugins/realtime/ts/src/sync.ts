@@ -1,7 +1,3 @@
-import { createLogger } from '@nself/plugin-utils';
-
-const logger = createLogger('realtime:sync');
-
 /**
  * Realtime plugin maintains live connection state.
  * It does not sync from external APIs - state is managed in real-time

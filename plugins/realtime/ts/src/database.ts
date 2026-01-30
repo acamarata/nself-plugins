@@ -18,9 +18,23 @@ const { Pool } = pg;
 export class Database {
   private pool: pg.Pool;
 
-  constructor(connectionString: string) {
+  constructor(config?: { host?: string; port?: number; database?: string; user?: string; password?: string; ssl?: boolean }) {
+    const dbConfig = config ?? {
+      host: process.env.POSTGRES_HOST ?? 'localhost',
+      port: parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
+      database: process.env.POSTGRES_DB ?? 'nself',
+      user: process.env.POSTGRES_USER ?? 'postgres',
+      password: process.env.POSTGRES_PASSWORD ?? '',
+      ssl: process.env.POSTGRES_SSL === 'true',
+    };
+
     this.pool = new Pool({
-      connectionString,
+      host: dbConfig.host,
+      port: dbConfig.port,
+      database: dbConfig.database,
+      user: dbConfig.user,
+      password: dbConfig.password,
+      ssl: dbConfig.ssl ? { rejectUnauthorized: false } : false,
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 2000,

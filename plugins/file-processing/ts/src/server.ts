@@ -5,7 +5,7 @@
 import { createLogger } from '@nself/plugin-utils';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { loadConfig, validateConfig, getDatabaseUrl } from './config.js';
+import { loadConfig, validateConfig, getDatabaseConfig } from './config.js';
 import { Database } from './database.js';
 import type { CreateJobRequest, ProcessingStatus } from './types.js';
 
@@ -15,7 +15,7 @@ async function startServer() {
   const config = loadConfig();
   validateConfig(config);
 
-  const db = new Database(getDatabaseUrl());
+  const db = new Database(getDatabaseConfig());
   const fastify = Fastify({
     logger: {
       level: config.logLevel,

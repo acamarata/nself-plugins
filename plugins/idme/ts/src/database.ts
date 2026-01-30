@@ -21,9 +21,23 @@ const logger = createLogger('idme:database');
 export class IDmeDatabase {
   private pool: Pool;
 
-  constructor(connectionString?: string) {
+  constructor(config?: { host?: string; port?: number; database?: string; user?: string; password?: string; ssl?: boolean }) {
+    const dbConfig = config ?? {
+      host: process.env.POSTGRES_HOST ?? 'localhost',
+      port: parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
+      database: process.env.POSTGRES_DB ?? 'nself',
+      user: process.env.POSTGRES_USER ?? 'postgres',
+      password: process.env.POSTGRES_PASSWORD ?? '',
+      ssl: process.env.POSTGRES_SSL === 'true',
+    };
+
     this.pool = new Pool({
-      connectionString: connectionString || process.env.DATABASE_URL,
+      host: dbConfig.host,
+      port: dbConfig.port,
+      database: dbConfig.database,
+      user: dbConfig.user,
+      password: dbConfig.password,
+      ssl: dbConfig.ssl ? { rejectUnauthorized: false } : false,
     });
     logger.info('Database connection pool created');
   }

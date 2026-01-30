@@ -4,7 +4,9 @@
  */
 
 import { Worker, Job } from 'bullmq';
-import IORedis from 'ioredis';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const IORedis = require('ioredis');
 import { createLogger } from '@nself/plugin-utils';
 import { getConfig } from './config.js';
 import { JobsDatabase } from './database.js';

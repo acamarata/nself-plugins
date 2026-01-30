@@ -4,7 +4,7 @@
 
 import { createLogger } from '@nself/plugin-utils';
 import { Worker, Queue } from 'bullmq';
-import { loadConfig, validateConfig, getDatabaseUrl } from './config.js';
+import { loadConfig, validateConfig, getDatabaseConfig } from './config.js';
 import { Database } from './database.js';
 import { createStorageAdapter } from './storage.js';
 import { FileProcessor } from './processor.js';
@@ -16,7 +16,7 @@ async function startWorker() {
   const config = loadConfig();
   validateConfig(config);
 
-  const db = new Database(getDatabaseUrl());
+  const db = new Database(getDatabaseConfig());
   const storage = createStorageAdapter(config);
   const processor = new FileProcessor(config, storage);
 

@@ -29,7 +29,8 @@ uninstall_realtime_plugin() {
     printf "  - Event logs\n"
     printf "\n"
 
-    read -p "Continue? (y/N): " -n 1 -r
+    printf "Continue? (y/N): "
+    read -r REPLY
     printf "\n"
 
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -74,7 +75,8 @@ uninstall_realtime_plugin() {
     schema_remove_plugin_migrations "realtime"
 
     # Remove cache and logs (ask first)
-    read -p "Remove cache and logs? (y/N): " -n 1 -r
+    printf "Remove cache and logs? (y/N): "
+    read -r REPLY
     printf "\n"
 
     if [[ $REPLY =~ ^[Yy]$ ]]; then

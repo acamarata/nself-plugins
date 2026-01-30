@@ -5,7 +5,7 @@
 
 import { createLogger } from '@nself/plugin-utils';
 import { Command } from 'commander';
-import { loadConfig, validateConfig, getDatabaseUrl } from './config.js';
+import { loadConfig, validateConfig, getDatabaseConfig } from './config.js';
 import { Database } from './database.js';
 import { createStorageAdapter } from './storage.js';
 import { FileProcessor } from './processor.js';
@@ -50,7 +50,7 @@ program
   .action(async (fileId: string, filePath: string) => {
     try {
       const config = loadConfig();
-      const db = new Database(getDatabaseUrl());
+      const db = new Database(getDatabaseConfig());
       const storage = createStorageAdapter(config);
       const processor = new FileProcessor(config, storage);
 
@@ -82,7 +82,7 @@ program
   .description('View processing statistics')
   .action(async () => {
     try {
-      const db = new Database(getDatabaseUrl());
+      const db = new Database(getDatabaseConfig());
       const stats = await db.getStats();
 
       logger.info('\nFile Processing Statistics:');
@@ -112,7 +112,7 @@ program
   .option('-d, --days <days>', 'Retention days', '30')
   .action(async (options: { days: string }) => {
     try {
-      const db = new Database(getDatabaseUrl());
+      const db = new Database(getDatabaseConfig());
       const days = parseInt(options.days, 10);
       const deleted = await db.cleanup(days);
 

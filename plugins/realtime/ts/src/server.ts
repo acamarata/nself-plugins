@@ -14,14 +14,12 @@ import pino from 'pino';
 import { config } from './config.js';
 import { Database } from './database.js';
 import type {
-  AuthPayload,
   JoinRoomPayload,
   LeaveRoomPayload,
   MessagePayload,
   TypingPayload,
   PresencePayload,
   SocketCallback,
-  SocketResponse,
   ServerStats,
 } from './types.js';
 
@@ -48,7 +46,14 @@ const logger = pino({
 // Database
 // =============================================================================
 
-const db = new Database(config.databaseUrl);
+const db = new Database({
+  host: config.databaseHost,
+  port: config.databasePort,
+  database: config.databaseName,
+  user: config.databaseUser,
+  password: config.databasePassword,
+  ssl: config.databaseSsl,
+});
 
 // =============================================================================
 // Fastify HTTP Server (for health checks and metrics)

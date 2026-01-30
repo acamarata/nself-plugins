@@ -21,7 +21,8 @@ uninstall_file_processing_plugin() {
 
     # Confirmation prompt
     plugin_warn "This will remove all file processing data, thumbnails, and scan results."
-    read -p "Are you sure? (y/N) " -n 1 -r
+    printf "Are you sure? (y/N) "
+    read -r REPLY
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         plugin_info "Uninstall cancelled."

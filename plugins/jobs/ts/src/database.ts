@@ -212,7 +212,13 @@ export class JobsDatabase {
     const [queueStats, typeStats, counts] = await Promise.all([
       this.query('SELECT * FROM queue_stats ORDER BY queue_name'),
       this.query('SELECT * FROM job_type_stats ORDER BY total_jobs DESC LIMIT 20'),
-      this.query(`SELECT
+      this.query<{
+        waiting: number;
+        active: number;
+        completed: number;
+        failed: number;
+        total: number;
+      }>(`SELECT
         COUNT(*) FILTER (WHERE status = 'waiting') as waiting,
         COUNT(*) FILTER (WHERE status = 'active') as active,
         COUNT(*) FILTER (WHERE status = 'completed') as completed,

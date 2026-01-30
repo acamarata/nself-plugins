@@ -180,7 +180,7 @@ class GCSStorageAdapter implements StorageAdapter {
 
     return {
       url: `https://storage.googleapis.com/${targetBucket}/${remotePath}`,
-      size: parseInt(metadata.size || '0', 10),
+      size: parseInt(String(metadata.size || '0'), 10),
     };
   }
 
@@ -230,7 +230,7 @@ class GCSStorageAdapter implements StorageAdapter {
     const [metadata] = await file.getMetadata();
 
     return {
-      size: parseInt(metadata.size || '0', 10),
+      size: parseInt(String(metadata.size || '0'), 10),
       contentType: metadata.contentType || 'application/octet-stream',
       lastModified: new Date(metadata.updated || Date.now()),
     };

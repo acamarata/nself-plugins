@@ -5,7 +5,7 @@
 import { createLogger } from '@nself/plugin-utils';
 import sharp from 'sharp';
 import ffmpeg from 'fluent-ffmpeg';
-import { fromFile } from 'file-type';
+import { fileTypeFromFile } from 'file-type';
 import ExifReader from 'exifreader';
 import { createHash } from 'crypto';
 import { readFile, unlink } from 'fs/promises';
@@ -226,7 +226,7 @@ export class FileProcessor {
 
     try {
       // Detect actual file type
-      const fileType = await fromFile(filePath);
+      const fileType = await fileTypeFromFile(filePath);
       if (fileType) {
         extracted.detectedMimeType = fileType.mime;
         extracted.detectedExtension = fileType.ext;

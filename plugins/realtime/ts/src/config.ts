@@ -48,18 +48,20 @@ export function loadConfig(): RealtimeConfig {
     throw new Error('REALTIME_CORS_ORIGIN is required');
   }
 
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    throw new Error('DATABASE_URL is required');
-  }
-
   return {
     // Server
     port: parseIntEnv(process.env.REALTIME_PORT, 3101),
     host: process.env.REALTIME_HOST || '0.0.0.0',
     redisUrl,
-    databaseUrl,
     corsOrigin: parseArray(corsOrigin, ['http://localhost:3000']),
+
+    // Database
+    databaseHost: process.env.POSTGRES_HOST ?? 'localhost',
+    databasePort: parseIntEnv(process.env.POSTGRES_PORT, 5432),
+    databaseName: process.env.POSTGRES_DB ?? 'nself',
+    databaseUser: process.env.POSTGRES_USER ?? 'postgres',
+    databasePassword: process.env.POSTGRES_PASSWORD ?? '',
+    databaseSsl: process.env.POSTGRES_SSL === 'true',
 
     // Limits
     maxConnections: parseIntEnv(process.env.REALTIME_MAX_CONNECTIONS, 10000),

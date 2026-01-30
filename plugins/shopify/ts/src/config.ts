@@ -16,7 +16,12 @@ export interface ShopifyConfig {
   shopifyWebhookSecret: string;
 
   // Database
-  databaseUrl: string;
+  databaseHost: string;
+  databasePort: number;
+  databaseName: string;
+  databaseUser: string;
+  databasePassword: string;
+  databaseSsl: boolean;
 
   // Server
   port: number;
@@ -43,7 +48,12 @@ export function loadConfig(overrides: Partial<ShopifyConfig> = {}): ShopifyConfi
     shopifyWebhookSecret: overrides.shopifyWebhookSecret ?? process.env.SHOPIFY_WEBHOOK_SECRET ?? '',
 
     // Database
-    databaseUrl: overrides.databaseUrl ?? process.env.DATABASE_URL ?? '',
+    databaseHost: overrides.databaseHost ?? process.env.POSTGRES_HOST ?? 'localhost',
+    databasePort: overrides.databasePort ?? parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
+    databaseName: overrides.databaseName ?? process.env.POSTGRES_DB ?? 'nself',
+    databaseUser: overrides.databaseUser ?? process.env.POSTGRES_USER ?? 'postgres',
+    databasePassword: overrides.databasePassword ?? process.env.POSTGRES_PASSWORD ?? '',
+    databaseSsl: overrides.databaseSsl ?? process.env.POSTGRES_SSL === 'true',
 
     // Server
     port: overrides.port ?? parseInt(process.env.PORT ?? '3003', 10),
@@ -70,10 +80,6 @@ export function loadConfig(overrides: Partial<ShopifyConfig> = {}): ShopifyConfi
   // Validate Shopify access token format
   if (config.shopifyAccessToken && !config.shopifyAccessToken.match(/^shpat_/)) {
     errors.push('Invalid SHOPIFY_ACCESS_TOKEN format. Expected shpat_*');
-  }
-
-  if (!config.databaseUrl) {
-    errors.push('DATABASE_URL is required');
   }
 
   if (errors.length > 0) {

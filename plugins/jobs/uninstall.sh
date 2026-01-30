@@ -26,7 +26,8 @@ uninstall_jobs_plugin() {
     printf "  - Remove cache and log files\n"
     printf "  - Clear Redis queues (if JOBS_CLEAR_REDIS=true)\n"
     printf "\n"
-    read -p "Continue? (yes/no): " confirm
+    printf "Continue? (yes/no): "
+    read -r confirm
     printf "\n"
 
     if [[ "$confirm" != "yes" ]]; then

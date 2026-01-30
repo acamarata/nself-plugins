@@ -229,7 +229,7 @@ export interface FileCleanupResult {
 // Job Options
 // =============================================================================
 
-export interface CreateJobOptions extends JobsOptions {
+export interface CreateJobOptions extends Omit<JobsOptions, 'priority'> {
   queue?: string;
   priority?: JobPriority;
   delay?: number;

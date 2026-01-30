@@ -10,8 +10,13 @@ export interface RealtimeConfig {
   port: number;
   host: string;
   redisUrl: string;
-  databaseUrl: string;
   corsOrigin: string[];
+  databaseHost: string;
+  databasePort: number;
+  databaseName: string;
+  databaseUser: string;
+  databasePassword: string;
+  databaseSsl: boolean;
   maxConnections: number;
   pingTimeout: number;
   pingInterval: number;

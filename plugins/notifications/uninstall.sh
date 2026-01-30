@@ -28,7 +28,8 @@ uninstall_notifications_plugin() {
     printf "  - Provider configurations\n"
     printf "\n"
 
-    read -p "Are you sure you want to continue? [y/N] " -n 1 -r
+    printf "Are you sure you want to continue? [y/N] "
+    read -r REPLY
     printf "\n"
 
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then

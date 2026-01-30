@@ -1,7 +1,3 @@
-import { createLogger } from '@nself/plugin-utils';
-
-const logger = createLogger('realtime:webhooks');
-
 /**
  * Realtime plugin is a Socket.io server that handles real-time events directly.
  * It does not use traditional HTTP webhooks - events flow through WebSocket connections.

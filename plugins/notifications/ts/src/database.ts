@@ -18,7 +18,12 @@ export class DatabaseClient {
 
   constructor() {
     this.pool = new Pool({
-      connectionString: config.database.url,
+      host: config.database.host,
+      port: config.database.port,
+      database: config.database.database,
+      user: config.database.user,
+      password: config.database.password,
+      ssl: config.database.ssl ? { rejectUnauthorized: false } : false,
     });
   }
 

@@ -130,7 +130,7 @@ schema_status() {
 
 # Ensure migrations table exists
 schema_ensure_migrations_table() {
-    plugin_db_query "
+    plugin_db_exec "
         CREATE TABLE IF NOT EXISTS _nself_plugin_migrations (
             id SERIAL PRIMARY KEY,
             plugin_name VARCHAR(255) NOT NULL,
@@ -138,7 +138,7 @@ schema_ensure_migrations_table() {
             applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(plugin_name, migration_name)
         );
-    " >/dev/null 2>&1 || true
+    " 2>/dev/null || true
 }
 
 # Check if migration is applied
@@ -160,7 +160,7 @@ schema_record_migration() {
 
     schema_ensure_migrations_table
 
-    plugin_db_query "INSERT INTO _nself_plugin_migrations (plugin_name, migration_name) VALUES ('$plugin_name', '$migration_name');" >/dev/null
+    plugin_db_exec "INSERT INTO _nself_plugin_migrations (plugin_name, migration_name) VALUES ('$plugin_name', '$migration_name');"
 }
 
 # Remove migration record
@@ -168,7 +168,17 @@ schema_remove_migration() {
     local plugin_name="$1"
     local migration_name="$2"
 
-    plugin_db_query "DELETE FROM _nself_plugin_migrations WHERE plugin_name = '$plugin_name' AND migration_name = '$migration_name';" >/dev/null
+    plugin_db_exec "DELETE FROM _nself_plugin_migrations WHERE plugin_name = '$plugin_name' AND migration_name = '$migration_name';"
+}
+
+# Remove all migration records for a plugin
+schema_remove_plugin_migrations() {
+    local plugin_name="$1"
+
+    schema_ensure_migrations_table
+
+    plugin_db_exec "DELETE FROM _nself_plugin_migrations WHERE plugin_name = '$plugin_name';"
+    plugin_debug "Removed all migration records for $plugin_name"
 }
 
 # =============================================================================

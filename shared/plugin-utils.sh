@@ -152,6 +152,22 @@ plugin_db_exec_file() {
     fi
 }
 
+# Execute SQL statement without returning results
+plugin_db_exec() {
+    local query="$1"
+    local db_url
+    db_url=$(plugin_get_db_url)
+
+    if command -v psql >/dev/null 2>&1; then
+        psql "$db_url" -c "$query" >/dev/null 2>&1
+    elif command -v docker >/dev/null 2>&1; then
+        docker exec -i "${PROJECT_NAME:-nself}_postgres" psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-nself}" -c "$query" >/dev/null 2>&1
+    else
+        plugin_error "No PostgreSQL client available"
+        return 1
+    fi
+}
+
 # Check if table exists
 plugin_table_exists() {
     local table_name="$1"
@@ -360,4 +376,66 @@ plugin_json_get_array() {
     local key="$2"
 
     printf '%s' "$json" | grep -o "\"$key\"[[:space:]]*:[[:space:]]*\[[^]]*\]" | sed 's/.*\[\([^]]*\)\].*/\1/' | tr ',' '\n' | sed 's/[" ]//g'
+}
+
+# =============================================================================
+# Plugin Registry Functions
+# =============================================================================
+
+# Ensure plugin registry table exists
+plugin_ensure_registry_table() {
+    plugin_db_exec "
+        CREATE TABLE IF NOT EXISTS _nself_plugin_registry (
+            plugin_name VARCHAR(255) PRIMARY KEY,
+            version VARCHAR(50),
+            installed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            status VARCHAR(50) DEFAULT 'active'
+        );
+    " 2>/dev/null || true
+}
+
+# Mark plugin as installed
+plugin_mark_installed() {
+    local plugin_name="$1"
+    local version="${2:-1.0.0}"
+
+    plugin_ensure_registry_table
+
+    plugin_db_exec "
+        INSERT INTO _nself_plugin_registry (plugin_name, version, installed_at, status)
+        VALUES ('$plugin_name', '$version', CURRENT_TIMESTAMP, 'active')
+        ON CONFLICT (plugin_name) DO UPDATE SET
+            version = EXCLUDED.version,
+            updated_at = CURRENT_TIMESTAMP,
+            status = 'active';
+    "
+
+    plugin_debug "Marked $plugin_name as installed (version: $version)"
+}
+
+# Mark plugin as uninstalled
+plugin_mark_uninstalled() {
+    local plugin_name="$1"
+
+    plugin_ensure_registry_table
+
+    plugin_db_exec "
+        UPDATE _nself_plugin_registry
+        SET status = 'uninstalled', updated_at = CURRENT_TIMESTAMP
+        WHERE plugin_name = '$plugin_name';
+    "
+
+    plugin_debug "Marked $plugin_name as uninstalled"
+}
+
+# Check if plugin is installed
+plugin_is_installed() {
+    local plugin_name="$1"
+
+    plugin_ensure_registry_table
+
+    local result
+    result=$(plugin_db_query "SELECT COUNT(*) FROM _nself_plugin_registry WHERE plugin_name = '$plugin_name' AND status = 'active';")
+    [[ "$result" =~ [1-9] ]]
 }

@@ -120,12 +120,15 @@ export function validateConfig(config: FileProcessingConfig): void {
 }
 
 /**
- * Get database URL
+ * Get database configuration
  */
-export function getDatabaseUrl(): string {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    throw new Error('DATABASE_URL is required');
-  }
-  return url;
+export function getDatabaseConfig() {
+  return {
+    host: process.env.POSTGRES_HOST ?? 'localhost',
+    port: parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
+    database: process.env.POSTGRES_DB ?? 'nself',
+    user: process.env.POSTGRES_USER ?? 'postgres',
+    password: process.env.POSTGRES_PASSWORD ?? '',
+    ssl: process.env.POSTGRES_SSL === 'true',
+  };
 }
