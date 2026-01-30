@@ -49,7 +49,7 @@
 
   "envVars": {
     "required": [
-      "SHOPIFY_STORE",
+      "SHOPIFY_SHOP_DOMAIN",
       "SHOPIFY_ACCESS_TOKEN"
     ],
     "optional": [

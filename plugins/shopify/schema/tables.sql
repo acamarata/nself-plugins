@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS shopify_shops (
 
 CREATE TABLE IF NOT EXISTS shopify_products (
     id BIGINT PRIMARY KEY,                          -- Shopify product ID
-    shop_id BIGINT REFERENCES shopify_shops(id),
+    shop_id BIGINT REFERENCES shopify_shops(id) ON DELETE CASCADE,
     title VARCHAR(255) NOT NULL,
     body_html TEXT,
     vendor VARCHAR(255),
@@ -113,7 +113,7 @@ CREATE INDEX IF NOT EXISTS idx_shopify_variants_inventory ON shopify_variants(in
 
 CREATE TABLE IF NOT EXISTS shopify_collections (
     id BIGINT PRIMARY KEY,                          -- Shopify collection ID
-    shop_id BIGINT REFERENCES shopify_shops(id),
+    shop_id BIGINT REFERENCES shopify_shops(id) ON DELETE CASCADE,
     title VARCHAR(255) NOT NULL,
     body_html TEXT,
     handle VARCHAR(255),
@@ -140,7 +140,7 @@ CREATE INDEX IF NOT EXISTS idx_shopify_collections_handle ON shopify_collections
 
 CREATE TABLE IF NOT EXISTS shopify_customers (
     id BIGINT PRIMARY KEY,                          -- Shopify customer ID
-    shop_id BIGINT REFERENCES shopify_shops(id),
+    shop_id BIGINT REFERENCES shopify_shops(id) ON DELETE CASCADE,
     email VARCHAR(255),
     first_name VARCHAR(255),
     last_name VARCHAR(255),
@@ -175,12 +175,12 @@ CREATE INDEX IF NOT EXISTS idx_shopify_customers_state ON shopify_customers(stat
 
 CREATE TABLE IF NOT EXISTS shopify_orders (
     id BIGINT PRIMARY KEY,                          -- Shopify order ID
-    shop_id BIGINT REFERENCES shopify_shops(id),
+    shop_id BIGINT REFERENCES shopify_shops(id) ON DELETE CASCADE,
     order_number INTEGER NOT NULL,
     name VARCHAR(50) NOT NULL,                      -- #1001, etc.
     email VARCHAR(255),
     phone VARCHAR(50),
-    customer_id BIGINT REFERENCES shopify_customers(id),
+    customer_id BIGINT REFERENCES shopify_customers(id) ON DELETE SET NULL,
     financial_status VARCHAR(50),                   -- pending, paid, refunded, etc.
     fulfillment_status VARCHAR(50),                 -- null, partial, fulfilled
     cancel_reason VARCHAR(50),

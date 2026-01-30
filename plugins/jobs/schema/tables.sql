@@ -356,7 +356,7 @@ CREATE OR REPLACE FUNCTION cleanup_old_jobs(
 DECLARE
     v_deleted_count INTEGER;
 BEGIN
-    DELETE FROM jobs_tasks_tasks
+    DELETE FROM jobs_tasks
     WHERE status = 'completed'
       AND completed_at < NOW() - (p_older_than_hours || ' hours')::INTERVAL;
 
@@ -372,7 +372,7 @@ CREATE OR REPLACE FUNCTION cleanup_old_failed_jobs(
 DECLARE
     v_deleted_count INTEGER;
 BEGIN
-    DELETE FROM jobs_tasks_tasks
+    DELETE FROM jobs_tasks
     WHERE status = 'failed'
       AND failed_at < NOW() - (p_older_than_days || ' days')::INTERVAL;
 

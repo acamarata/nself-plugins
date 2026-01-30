@@ -27,7 +27,7 @@
   "author": "nself",
   "license": "Source-Available",
   "dependencies": {
-    "@nself/plugin-utils": "workspace:*",
+    "@nself/plugin-utils": "file:../../../shared",
     "fastify": "^4.28.1",
     "commander": "^12.1.0",
     "pg": "^8.13.1",
