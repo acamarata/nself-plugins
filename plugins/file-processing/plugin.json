@@ -1,0 +1,74 @@
+{
+  "name": "file-processing",
+  "version": "1.0.0",
+  "description": "File processing with thumbnails, optimization, and virus scanning for MinIO/S3/GCS/R2/B2/Azure",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/file-processing",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "infrastructure",
+  "tags": ["files", "storage", "processing", "thumbnails", "optimization", "virus-scanning"],
+
+  "tables": [
+    "file_processing_jobs",
+    "file_thumbnails",
+    "file_scans",
+    "file_metadata"
+  ],
+
+  "actions": {
+    "init": "Initialize file processing service",
+    "server": "Start HTTP server for processing endpoints",
+    "worker": "Start background worker for processing queue",
+    "process": "Process files and generate thumbnails",
+    "cleanup": "Clean up old processing jobs and temporary files",
+    "stats": "View processing statistics"
+  },
+
+  "envVars": {
+    "required": [
+      "FILE_STORAGE_PROVIDER",
+      "FILE_STORAGE_BUCKET"
+    ],
+    "optional": [
+      "FILE_STORAGE_ENDPOINT",
+      "FILE_STORAGE_ACCESS_KEY",
+      "FILE_STORAGE_SECRET_KEY",
+      "FILE_STORAGE_REGION",
+      "FILE_THUMBNAIL_SIZES",
+      "FILE_ENABLE_VIRUS_SCAN",
+      "FILE_ENABLE_OPTIMIZATION",
+      "FILE_MAX_SIZE",
+      "FILE_ALLOWED_TYPES",
+      "FILE_STRIP_EXIF",
+      "FILE_QUEUE_CONCURRENCY",
+      "CLAMAV_HOST",
+      "CLAMAV_PORT",
+      "REDIS_URL",
+      "PORT"
+    ]
+  },
+
+  "config": {
+    "port": 3104,
+    "defaultThumbnailSizes": [100, 400, 1200],
+    "maxFileSize": 104857600,
+    "queueConcurrency": 3,
+    "enableOptimization": true,
+    "stripExif": true,
+    "webhookPath": "/webhooks/file-processing"
+  },
+
+  "hooks": {
+    "postInstall": "install.sh",
+    "preUninstall": "uninstall.sh",
+    "postSync": null
+  },
+
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": ["*"],
+    "filesystem": ["logs", "cache", "temp"]
+  }
+}

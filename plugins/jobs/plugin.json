@@ -1,0 +1,84 @@
+{
+  "name": "jobs",
+  "version": "1.0.0",
+  "description": "BullMQ background job queue with priorities, scheduling, retries, and BullBoard dashboard",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/jobs",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "infrastructure",
+  "tags": ["jobs", "queue", "bullmq", "redis", "background", "scheduling", "cron", "workers"],
+
+  "tables": [
+    "jobs_tasks",
+    "job_results",
+    "job_schedules",
+    "job_failures"
+  ],
+
+  "webhooks": {},
+
+  "actions": {
+    "init": "Initialize jobs infrastructure",
+    "server": "Start BullBoard dashboard server",
+    "worker": "Start job worker process",
+    "schedule": "Manage scheduled jobs",
+    "retry": "Retry failed jobs",
+    "stats": "View job statistics"
+  },
+
+  "envVars": {
+    "required": [
+      "JOBS_REDIS_URL"
+    ],
+    "optional": [
+      "JOBS_DASHBOARD_ENABLED",
+      "JOBS_DASHBOARD_PORT",
+      "JOBS_DEFAULT_CONCURRENCY",
+      "JOBS_RETRY_ATTEMPTS",
+      "JOBS_RETRY_DELAY",
+      "JOBS_JOB_TIMEOUT",
+      "JOBS_ENABLE_TELEMETRY",
+      "JOBS_CLEAN_COMPLETED_AFTER",
+      "JOBS_CLEAN_FAILED_AFTER"
+    ]
+  },
+
+  "config": {
+    "dashboardPath": "/dashboard",
+    "dashboardPort": 3105,
+    "dashboardEnabled": true,
+    "defaultConcurrency": 5,
+    "retryAttempts": 3,
+    "retryDelay": 5000,
+    "jobTimeout": 60000,
+    "enableTelemetry": true,
+    "cleanCompletedAfter": 86400000,
+    "cleanFailedAfter": 604800000,
+    "queues": {
+      "default": { "concurrency": 5, "priority": 0 },
+      "high-priority": { "concurrency": 3, "priority": 10 },
+      "low-priority": { "concurrency": 10, "priority": -10 }
+    },
+    "jobTypes": [
+      "send-email",
+      "http-request",
+      "database-backup",
+      "file-cleanup",
+      "custom"
+    ]
+  },
+
+  "hooks": {
+    "postInstall": "install.sh",
+    "preUninstall": "uninstall.sh",
+    "postSync": null
+  },
+
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": ["redis"],
+    "filesystem": ["logs", "cache"]
+  }
+}

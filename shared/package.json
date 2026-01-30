@@ -21,6 +21,18 @@
     "./logger": {
       "types": "./dist/logger.d.ts",
       "import": "./dist/logger.js"
+    },
+    "./http": {
+      "types": "./dist/http.d.ts",
+      "import": "./dist/http.js"
+    },
+    "./validation": {
+      "types": "./dist/validation.d.ts",
+      "import": "./dist/validation.js"
+    },
+    "./security": {
+      "types": "./dist/security.d.ts",
+      "import": "./dist/security.js"
     }
   },
   "scripts": {

@@ -1,7 +1,7 @@
 {
   "$schema": "./registry-schema.json",
   "version": "1.0.0",
-  "lastUpdated": "2026-01-24T12:00:00Z",
+  "lastUpdated": "2026-01-30T12:30:00Z",
   "plugins": {
     "stripe": {
       "name": "stripe",
@@ -283,6 +283,369 @@
       ],
       "dependencies": ["pg", "@shopify/shopify-api", "fastify", "commander"],
       "checksums": {"sha256": ""}
+    },
+    "realtime": {
+      "name": "realtime",
+      "version": "1.0.0",
+      "description": "Socket.io real-time server with presence tracking, typing indicators, and room management",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/realtime",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/realtime",
+      "minNselfVersion": "0.4.8",
+      "category": "infrastructure",
+      "tags": ["realtime", "socket.io", "websockets", "presence", "chat", "notifications"],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-realtime",
+        "defaultPort": 3101,
+        "packageManager": "npm",
+        "framework": "socket.io"
+      },
+      "tables": [
+        "realtime_connections",
+        "realtime_rooms",
+        "realtime_room_members",
+        "realtime_presence",
+        "realtime_typing",
+        "realtime_events"
+      ],
+      "views": [
+        "realtime_active_connections",
+        "realtime_room_stats",
+        "realtime_current_typing",
+        "realtime_presence_summary"
+      ],
+      "webhooks": [],
+      "cliCommands": [
+        {"name": "init", "description": "Initialize database schema"},
+        {"name": "server", "description": "Start Socket.io server"},
+        {"name": "status", "description": "Show connection statistics"},
+        {"name": "rooms", "description": "List active rooms"},
+        {"name": "connections", "description": "View active connections"},
+        {"name": "presence", "description": "View user presence states"}
+      ],
+      "apiEndpoints": [
+        {"method": "GET", "path": "/health", "description": "Health check"},
+        {"method": "GET", "path": "/status", "description": "Server status and metrics"},
+        {"method": "GET", "path": "/rooms", "description": "List active rooms"},
+        {"method": "GET", "path": "/connections", "description": "List active connections"},
+        {"method": "POST", "path": "/broadcast", "description": "Broadcast message to room"},
+        {"method": "DELETE", "path": "/connections/:id", "description": "Disconnect socket"}
+      ],
+      "envVars": [
+        {"name": "REALTIME_PORT", "required": false, "default": "3101", "description": "Server port"},
+        {"name": "REALTIME_REDIS_URL", "required": false, "description": "Redis URL for multi-instance scaling"},
+        {"name": "REALTIME_CORS_ORIGIN", "required": true, "description": "CORS allowed origins"},
+        {"name": "REALTIME_MAX_CONNECTIONS", "required": false, "default": "10000", "description": "Maximum concurrent connections"},
+        {"name": "REALTIME_PING_TIMEOUT", "required": false, "default": "60000", "description": "Ping timeout (ms)"},
+        {"name": "REALTIME_PING_INTERVAL", "required": false, "default": "25000", "description": "Ping interval (ms)"},
+        {"name": "REALTIME_JWT_SECRET", "required": false, "description": "JWT secret for authentication"},
+        {"name": "DATABASE_URL", "required": true, "description": "PostgreSQL connection string"}
+      ],
+      "dependencies": ["pg", "socket.io", "socket.io-redis", "ioredis", "fastify", "commander", "jsonwebtoken", "pino", "dotenv"],
+      "checksums": {"sha256": ""}
+    },
+    "file-processing": {
+      "name": "file-processing",
+      "version": "1.0.0",
+      "description": "File processing with thumbnails, optimization, and virus scanning for MinIO/S3/GCS/R2/B2/Azure",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/file-processing",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/file-processing",
+      "minNselfVersion": "0.4.8",
+      "category": "infrastructure",
+      "tags": ["files", "storage", "thumbnails", "images", "video", "s3", "minio"],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-file-processing",
+        "defaultPort": 3104,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "file_processing_jobs",
+        "file_thumbnails",
+        "file_scans",
+        "file_metadata"
+      ],
+      "views": [
+        "file_processing_queue",
+        "file_processing_failures",
+        "file_security_alerts",
+        "file_processing_stats",
+        "thumbnail_generation_stats"
+      ],
+      "webhooks": [],
+      "cliCommands": [
+        {"name": "init", "description": "Initialize database schema"},
+        {"name": "server", "description": "Start file processing API"},
+        {"name": "worker", "description": "Start processing worker"},
+        {"name": "process", "description": "Process a file"},
+        {"name": "cleanup", "description": "Remove old jobs and temporary files"},
+        {"name": "stats", "description": "Show processing statistics"}
+      ],
+      "apiEndpoints": [
+        {"method": "GET", "path": "/health", "description": "Health check"},
+        {"method": "POST", "path": "/api/jobs", "description": "Queue file for processing"},
+        {"method": "GET", "path": "/api/jobs/:id", "description": "Get job status"},
+        {"method": "GET", "path": "/api/jobs", "description": "List processing jobs"},
+        {"method": "GET", "path": "/api/stats", "description": "Processing statistics"}
+      ],
+      "envVars": [
+        {"name": "FILE_STORAGE_PROVIDER", "required": true, "description": "Storage provider: minio, s3, gcs, r2, b2, azure"},
+        {"name": "FILE_STORAGE_ENDPOINT", "required": true, "description": "Storage endpoint URL"},
+        {"name": "FILE_STORAGE_BUCKET", "required": true, "description": "Storage bucket name"},
+        {"name": "FILE_STORAGE_ACCESS_KEY", "required": true, "description": "Storage access key"},
+        {"name": "FILE_STORAGE_SECRET_KEY", "required": true, "description": "Storage secret key"},
+        {"name": "FILE_THUMBNAIL_SIZES", "required": false, "default": "100x100,400x400,1200x1200", "description": "Thumbnail sizes"},
+        {"name": "FILE_ENABLE_VIRUS_SCAN", "required": false, "default": "false", "description": "Enable virus scanning"},
+        {"name": "FILE_ENABLE_OPTIMIZATION", "required": false, "default": "true", "description": "Enable image optimization"},
+        {"name": "FILE_MAX_SIZE", "required": false, "default": "100MB", "description": "Max file size"},
+        {"name": "FILE_ALLOWED_TYPES", "required": false, "default": "image/*,video/*,application/pdf", "description": "Allowed MIME types"},
+        {"name": "REDIS_URL", "required": true, "description": "Redis URL for job queue"},
+        {"name": "DATABASE_URL", "required": true, "description": "PostgreSQL connection string"},
+        {"name": "PORT", "required": false, "default": "3104", "description": "Server port"}
+      ],
+      "dependencies": ["pg", "fastify", "commander", "sharp", "fluent-ffmpeg", "bullmq", "minio", "@aws-sdk/client-s3", "ioredis", "dotenv"],
+      "checksums": {"sha256": ""}
+    },
+    "jobs": {
+      "name": "jobs",
+      "version": "1.0.0",
+      "description": "BullMQ background job queue with priorities, scheduling, retries, and BullBoard dashboard",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/jobs",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/jobs",
+      "minNselfVersion": "0.4.8",
+      "category": "infrastructure",
+      "tags": ["jobs", "queue", "background", "bullmq", "worker", "cron"],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-jobs",
+        "defaultPort": 3105,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "jobs_tasks",
+        "job_results",
+        "job_schedules",
+        "job_failures"
+      ],
+      "views": [
+        "jobs_active",
+        "jobs_failed_details",
+        "queue_stats",
+        "job_type_stats",
+        "recent_failures",
+        "scheduled_jobs_overview"
+      ],
+      "webhooks": [],
+      "cliCommands": [
+        {"name": "init", "description": "Initialize database schema"},
+        {"name": "server", "description": "Start API + BullBoard dashboard"},
+        {"name": "worker", "description": "Start job worker"},
+        {"name": "schedule", "description": "Manage cron schedules"},
+        {"name": "retry", "description": "Retry failed job"},
+        {"name": "stats", "description": "Show queue statistics"}
+      ],
+      "apiEndpoints": [
+        {"method": "GET", "path": "/health", "description": "Health check"},
+        {"method": "GET", "path": "/dashboard", "description": "BullBoard dashboard"},
+        {"method": "POST", "path": "/api/jobs", "description": "Add job to queue"},
+        {"method": "GET", "path": "/api/jobs/:id", "description": "Get job status"},
+        {"method": "POST", "path": "/api/jobs/:id/retry", "description": "Retry failed job"},
+        {"method": "GET", "path": "/api/schedules", "description": "List schedules"},
+        {"method": "POST", "path": "/api/schedules", "description": "Create schedule"},
+        {"method": "GET", "path": "/api/stats", "description": "Queue statistics"}
+      ],
+      "envVars": [
+        {"name": "JOBS_REDIS_URL", "required": true, "description": "Redis connection URL"},
+        {"name": "JOBS_DASHBOARD_ENABLED", "required": false, "default": "true", "description": "Enable BullBoard dashboard"},
+        {"name": "JOBS_DEFAULT_CONCURRENCY", "required": false, "default": "5", "description": "Default worker concurrency"},
+        {"name": "JOBS_RETRY_ATTEMPTS", "required": false, "default": "3", "description": "Default retry attempts"},
+        {"name": "JOBS_RETRY_DELAY", "required": false, "default": "5000", "description": "Retry delay (ms)"},
+        {"name": "JOBS_JOB_TIMEOUT", "required": false, "default": "60000", "description": "Job timeout (ms)"},
+        {"name": "DATABASE_URL", "required": true, "description": "PostgreSQL connection string"},
+        {"name": "PORT", "required": false, "default": "3105", "description": "Server port"}
+      ],
+      "dependencies": ["pg", "fastify", "commander", "bullmq", "ioredis", "@bull-board/api", "@bull-board/fastify", "dotenv"],
+      "checksums": {"sha256": ""}
+    },
+    "notifications": {
+      "name": "notifications",
+      "version": "1.0.0",
+      "description": "Multi-channel notifications (email, push, SMS) with templates, preferences, and delivery tracking",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/notifications",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/notifications",
+      "minNselfVersion": "0.4.8",
+      "category": "infrastructure",
+      "tags": ["notifications", "email", "push", "sms", "templates", "messaging"],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-notifications",
+        "defaultPort": 3102,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "notification_templates",
+        "notification_preferences",
+        "notification_messages",
+        "notification_queue",
+        "notification_providers",
+        "notification_batches"
+      ],
+      "views": [
+        "notification_delivery_rates",
+        "notification_engagement",
+        "notification_provider_health",
+        "notification_user_summary",
+        "notification_queue_backlog"
+      ],
+      "webhooks": [
+        "delivery.succeeded",
+        "delivery.failed",
+        "bounce",
+        "complaint",
+        "open",
+        "click",
+        "unsubscribe"
+      ],
+      "cliCommands": [
+        {"name": "init", "description": "Initialize database schema"},
+        {"name": "server", "description": "Start notification API server"},
+        {"name": "worker", "description": "Start delivery worker"},
+        {"name": "template", "description": "Manage templates"},
+        {"name": "test", "description": "Send test notification"},
+        {"name": "stats", "description": "Show delivery statistics"}
+      ],
+      "apiEndpoints": [
+        {"method": "GET", "path": "/health", "description": "Health check"},
+        {"method": "POST", "path": "/api/send", "description": "Send notification"},
+        {"method": "POST", "path": "/api/send-bulk", "description": "Send bulk notifications"},
+        {"method": "GET", "path": "/api/templates", "description": "List templates"},
+        {"method": "POST", "path": "/api/templates", "description": "Create template"},
+        {"method": "GET", "path": "/api/preferences/:userId", "description": "Get user preferences"},
+        {"method": "PUT", "path": "/api/preferences/:userId", "description": "Update preferences"},
+        {"method": "GET", "path": "/api/stats", "description": "Delivery statistics"}
+      ],
+      "envVars": [
+        {"name": "NOTIFICATIONS_EMAIL_ENABLED", "required": false, "default": "true", "description": "Enable email notifications"},
+        {"name": "NOTIFICATIONS_EMAIL_PROVIDER", "required": false, "default": "resend", "description": "Email provider: resend, sendgrid, mailgun, ses, smtp"},
+        {"name": "NOTIFICATIONS_EMAIL_API_KEY", "required": false, "description": "Email provider API key"},
+        {"name": "NOTIFICATIONS_EMAIL_FROM", "required": false, "description": "Default from address"},
+        {"name": "NOTIFICATIONS_PUSH_PROVIDER", "required": false, "description": "Push provider: fcm, onesignal, webpush"},
+        {"name": "NOTIFICATIONS_PUSH_API_KEY", "required": false, "description": "Push provider API key"},
+        {"name": "NOTIFICATIONS_SMS_PROVIDER", "required": false, "description": "SMS provider: twilio, plivo, sns"},
+        {"name": "NOTIFICATIONS_SMS_ACCOUNT_SID", "required": false, "description": "Twilio account SID"},
+        {"name": "NOTIFICATIONS_SMS_AUTH_TOKEN", "required": false, "description": "Twilio auth token"},
+        {"name": "NOTIFICATIONS_SMS_FROM", "required": false, "description": "SMS from number"},
+        {"name": "NOTIFICATIONS_QUEUE_BACKEND", "required": false, "default": "redis", "description": "Queue backend: redis, postgres"},
+        {"name": "NOTIFICATIONS_BATCH_INTERVAL", "required": false, "default": "86400", "description": "Batch interval (seconds)"},
+        {"name": "REDIS_URL", "required": false, "description": "Redis URL for queue"},
+        {"name": "DATABASE_URL", "required": true, "description": "PostgreSQL connection string"},
+        {"name": "PORT", "required": false, "default": "3102", "description": "Server port"}
+      ],
+      "dependencies": ["pg", "fastify", "commander", "handlebars", "resend", "twilio", "firebase-admin", "ioredis", "dotenv"],
+      "checksums": {"sha256": ""}
+    },
+    "idme": {
+      "name": "idme",
+      "version": "1.0.0",
+      "description": "ID.me OAuth authentication with government-grade identity verification for 7 groups",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/idme",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/idme",
+      "minNselfVersion": "0.4.8",
+      "category": "authentication",
+      "tags": ["authentication", "oauth", "idme", "verification", "military", "veteran"],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-idme",
+        "defaultPort": 3010,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "idme_verifications",
+        "idme_groups",
+        "idme_badges",
+        "idme_attributes",
+        "idme_webhook_events"
+      ],
+      "views": [
+        "idme_verified_users",
+        "idme_group_summary",
+        "idme_recent_verifications"
+      ],
+      "webhooks": [
+        "verification.created",
+        "verification.updated",
+        "verification.completed",
+        "verification.failed",
+        "group.verified",
+        "group.revoked",
+        "attribute.updated"
+      ],
+      "cliCommands": [
+        {"name": "init", "description": "Initialize database and show config"},
+        {"name": "verify", "description": "Check user verification status"},
+        {"name": "groups", "description": "List verification groups"},
+        {"name": "server", "description": "Start OAuth and webhook server"},
+        {"name": "test", "description": "Test configuration"}
+      ],
+      "apiEndpoints": [
+        {"method": "GET", "path": "/health", "description": "Health check"},
+        {"method": "GET", "path": "/auth/idme", "description": "Start OAuth flow"},
+        {"method": "GET", "path": "/callback/idme", "description": "OAuth callback"},
+        {"method": "POST", "path": "/webhook/idme", "description": "Webhook receiver"},
+        {"method": "GET", "path": "/api/verifications/:userId", "description": "Get verification status"}
+      ],
+      "envVars": [
+        {"name": "IDME_CLIENT_ID", "required": true, "description": "ID.me OAuth client ID"},
+        {"name": "IDME_CLIENT_SECRET", "required": true, "description": "ID.me OAuth client secret"},
+        {"name": "IDME_REDIRECT_URI", "required": true, "description": "OAuth redirect URL"},
+        {"name": "IDME_SCOPES", "required": false, "default": "openid,email,profile", "description": "OAuth scopes"},
+        {"name": "IDME_SANDBOX", "required": false, "default": "false", "description": "Use sandbox mode"},
+        {"name": "IDME_WEBHOOK_SECRET", "required": false, "description": "Webhook signature verification secret"},
+        {"name": "DATABASE_URL", "required": true, "description": "PostgreSQL connection string"},
+        {"name": "PORT", "required": false, "default": "3010", "description": "Server port"},
+        {"name": "HOST", "required": false, "default": "0.0.0.0", "description": "Server host"}
+      ],
+      "dependencies": ["pg", "fastify", "commander", "dotenv"],
+      "checksums": {"sha256": ""}
     }
   },
   "categories": {
@@ -320,6 +683,16 @@
       "name": "Finance",
       "description": "Banking, accounting, and financial data integrations",
       "icon": "dollar"
+    },
+    "infrastructure": {
+      "name": "Infrastructure",
+      "description": "Core infrastructure services: real-time, storage, jobs, notifications",
+      "icon": "server"
+    },
+    "authentication": {
+      "name": "Authentication",
+      "description": "Identity verification and specialized authentication providers",
+      "icon": "lock"
     }
   }
 }

@@ -1,0 +1,275 @@
+/**
+ * ID.me Database Operations
+ */
+
+import { Pool } from 'pg';
+import { createLogger } from '@nself/plugin-utils';
+import type {
+  IDmeVerificationRecord,
+  IDmeGroupRecord,
+  IDmeBadgeRecord,
+  IDmeAttributeRecord,
+  IDmeWebhookEvent,
+  IDmeTokens,
+  IDmeUserProfile,
+  IDmeVerification,
+} from './types.js';
+import { BADGE_CONFIG } from './types.js';
+
+const logger = createLogger('idme:database');
+
+export class IDmeDatabase {
+  private pool: Pool;
+
+  constructor(connectionString?: string) {
+    this.pool = new Pool({
+      connectionString: connectionString || process.env.DATABASE_URL,
+    });
+    logger.info('Database connection pool created');
+  }
+
+  /**
+   * Store or update verification record
+   */
+  async upsertVerification(
+    userId: string,
+    idmeUserId: string,
+    profile: IDmeUserProfile,
+    tokens: IDmeTokens,
+    verification: IDmeVerification
+  ): Promise<IDmeVerificationRecord> {
+    const query = `
+      INSERT INTO idme_verifications (
+        user_id, idme_user_id, email, verified, first_name, last_name,
+        birth_date, zip, phone, access_token, refresh_token, token_expires_at,
+        verified_at, last_synced_at, metadata
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), $14)
+      ON CONFLICT (idme_user_id)
+      DO UPDATE SET
+        verified = $4,
+        first_name = $5,
+        last_name = $6,
+        birth_date = $7,
+        zip = $8,
+        phone = $9,
+        access_token = $10,
+        refresh_token = $11,
+        token_expires_at = $12,
+        verified_at = $13,
+        last_synced_at = NOW(),
+        metadata = $14,
+        updated_at = NOW()
+      RETURNING *
+    `;
+
+    const values = [
+      userId,
+      idmeUserId,
+      profile.email,
+      verification.verified,
+      profile.firstName,
+      profile.lastName,
+      profile.birthDate ? new Date(profile.birthDate) : null,
+      profile.zip,
+      profile.phone,
+      tokens.accessToken,
+      tokens.refreshToken,
+      tokens.expiresAt,
+      verification.verified ? new Date() : null,
+      JSON.stringify(verification.attributes),
+    ];
+
+    const result = await this.pool.query(query, values);
+    logger.info('Verification upserted', { userId, idmeUserId });
+    return result.rows[0];
+  }
+
+  /**
+   * Store verification groups
+   */
+  async syncGroups(verificationId: string, userId: string, verification: IDmeVerification): Promise<void> {
+    for (const group of verification.groups) {
+      const query = `
+        INSERT INTO idme_groups (
+          verification_id, user_id, group_type, group_name, verified,
+          verified_at, affiliation, rank, status, metadata
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        ON CONFLICT (verification_id, group_type)
+        DO UPDATE SET
+          verified = $5,
+          verified_at = $6,
+          affiliation = $7,
+          rank = $8,
+          status = $9,
+          metadata = $10,
+          updated_at = NOW()
+      `;
+
+      const values = [
+        verificationId,
+        userId,
+        group.type,
+        group.name,
+        group.verified,
+        group.verifiedAt ? new Date(group.verifiedAt) : null,
+        verification.attributes.affiliation,
+        verification.attributes.rank,
+        verification.attributes.status,
+        JSON.stringify({}),
+      ];
+
+      await this.pool.query(query, values);
+    }
+
+    logger.info('Groups synced', { verificationId, count: verification.groups.length });
+  }
+
+  /**
+   * Create badges for verified groups
+   */
+  async syncBadges(verificationId: string, userId: string, verification: IDmeVerification): Promise<void> {
+    for (const group of verification.groups) {
+      const badgeConfig = BADGE_CONFIG[group.type];
+      if (!badgeConfig) continue;
+
+      const query = `
+        INSERT INTO idme_badges (
+          verification_id, user_id, badge_type, badge_name, badge_icon,
+          badge_color, verified_at, active, display_order
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT (verification_id, badge_type)
+        DO UPDATE SET
+          badge_name = $4,
+          badge_icon = $5,
+          badge_color = $6,
+          verified_at = $7,
+          active = $8,
+          updated_at = NOW()
+      `;
+
+      const values = [
+        verificationId,
+        userId,
+        group.type,
+        badgeConfig.name,
+        badgeConfig.icon,
+        badgeConfig.color,
+        group.verifiedAt ? new Date(group.verifiedAt) : null,
+        true,
+        0,
+      ];
+
+      await this.pool.query(query, values);
+    }
+
+    logger.info('Badges synced', { verificationId, count: verification.groups.length });
+  }
+
+  /**
+   * Store verification attributes
+   */
+  async syncAttributes(verificationId: string, userId: string, verification: IDmeVerification): Promise<void> {
+    const attributes = verification.attributes;
+    const entries = Object.entries(attributes);
+
+    for (const [key, value] of entries) {
+      if (!value) continue;
+
+      const query = `
+        INSERT INTO idme_attributes (
+          verification_id, user_id, attribute_key, attribute_value,
+          attribute_type, verified, verified_at, source
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, NOW(), 'idme')
+        ON CONFLICT (verification_id, attribute_key)
+        DO UPDATE SET
+          attribute_value = $4,
+          verified = $6,
+          verified_at = NOW(),
+          updated_at = NOW()
+      `;
+
+      const values = [verificationId, userId, key, String(value), 'string', true];
+
+      await this.pool.query(query, values);
+    }
+
+    logger.info('Attributes synced', { verificationId, count: entries.length });
+  }
+
+  /**
+   * Get verification by user ID
+   */
+  async getVerificationByUserId(userId: string): Promise<IDmeVerificationRecord | null> {
+    const result = await this.pool.query(
+      'SELECT * FROM idme_verifications WHERE user_id = $1',
+      [userId]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Get verification by email
+   */
+  async getVerificationByEmail(email: string): Promise<IDmeVerificationRecord | null> {
+    const result = await this.pool.query(
+      'SELECT * FROM idme_verifications WHERE email = $1',
+      [email]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Store webhook event
+   */
+  async storeWebhookEvent(
+    eventType: string,
+    payload: Record<string, unknown>,
+    eventId?: string,
+    userId?: string
+  ): Promise<IDmeWebhookEvent> {
+    const query = `
+      INSERT INTO idme_webhook_events (
+        event_id, event_type, user_id, payload, received_at
+      )
+      VALUES ($1, $2, $3, $4, NOW())
+      ON CONFLICT (event_id) DO UPDATE SET retry_count = idme_webhook_events.retry_count + 1
+      RETURNING *
+    `;
+
+    const values = [eventId || `evt_${Date.now()}`, eventType, userId, JSON.stringify(payload)];
+
+    const result = await this.pool.query(query, values);
+    logger.info('Webhook event stored', { eventType, eventId });
+    return result.rows[0];
+  }
+
+  /**
+   * Mark webhook event as processed
+   */
+  async markWebhookProcessed(eventId: string): Promise<void> {
+    await this.pool.query(
+      'UPDATE idme_webhook_events SET processed = TRUE, processed_at = NOW() WHERE event_id = $1',
+      [eventId]
+    );
+    logger.debug('Webhook marked processed', { eventId });
+  }
+
+  /**
+   * Close database connection
+   */
+  async close(): Promise<void> {
+    await this.pool.end();
+    logger.info('Database connection closed');
+  }
+}
+
+/**
+ * Helper to create database instance
+ */
+export function createDatabase(connectionString?: string): IDmeDatabase {
+  return new IDmeDatabase(connectionString);
+}

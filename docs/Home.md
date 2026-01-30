@@ -144,6 +144,11 @@ nself plugin shopify analytics top-products
 | **Stripe** | Billing | Payment processing, subscriptions, invoices | [Guide](plugins/Stripe.md) |
 | **GitHub** | DevOps | Repositories, issues, PRs, workflows | [Guide](plugins/GitHub.md) |
 | **Shopify** | E-Commerce | Products, orders, customers, inventory | [Guide](plugins/Shopify.md) |
+| **ID.me** | Authentication | ID.me OAuth authentication | [Guide](plugins/IDme.md) |
+| **Realtime** | Infrastructure | Socket.io real-time server | [Guide](plugins/Realtime.md) |
+| **Notifications** | Infrastructure | Multi-channel notifications | [Guide](plugins/Notifications.md) |
+| **File Processing** | Infrastructure | File processing with thumbnails | [Guide](plugins/FileProcessing.md) |
+| **Jobs** | Infrastructure | BullMQ background job queue | [Guide](plugins/Jobs.md) |
 
 ### Data Sync Coverage
 
@@ -429,6 +434,11 @@ If you discover a security vulnerability:
 | Stripe | 3001 |
 | GitHub | 3002 |
 | Shopify | 3003 |
+| ID.me | 3010 |
+| Realtime | 3101 |
+| Notifications | 3102 |
+| File Processing | 3104 |
+| Jobs | 3105 |
 
 ### Webhook Endpoints
 

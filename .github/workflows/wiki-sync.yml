@@ -74,6 +74,11 @@ jobs:
           - [[Stripe|plugins/Stripe]]
           - [[GitHub|plugins/GitHub]]
           - [[Shopify|plugins/Shopify]]
+          - [[ID.me|plugins/IDme]]
+          - [[Realtime|plugins/Realtime]]
+          - [[Notifications|plugins/Notifications]]
+          - [[File Processing|plugins/FileProcessing]]
+          - [[Jobs|plugins/Jobs]]
 
           ### Development
 
