@@ -62,15 +62,26 @@ jobs:
 
           # Create _Sidebar.md for wiki navigation
           cat > wiki/_Sidebar.md << 'SIDEBAR_EOF'
-          ### Navigation
+          ## nself-plugins
 
+          ### Home
           - [[Home]]
+
+          ### Getting Started
+          - [[Quick Start|getting-started/Quick-Start]]
           - [[Installation]]
-          - [[Security]]
-          - [[Planned Plugins|Planned-Plugins]]
+
+          ### Architecture
+          - [[Plugin System|architecture/Plugin-System]]
+
+          ### Guides
+          - [[Configuration|guides/Configuration]]
+          - [[Best Practices|guides/Best-Practices]]
+
+          ### API Reference
+          - [[REST API|api/REST-API]]
 
           ### Plugins
-
           - [[Stripe|plugins/Stripe]]
           - [[GitHub|plugins/GitHub]]
           - [[Shopify|plugins/Shopify]]
@@ -80,11 +91,21 @@ jobs:
           - [[File Processing|plugins/FileProcessing]]
           - [[Jobs|plugins/Jobs]]
 
-          ### Development
+          ### Troubleshooting
+          - [[Common Issues|troubleshooting/Common-Issues]]
+          - [[FAQ|troubleshooting/FAQ]]
+          - [[Debugging|troubleshooting/Debugging]]
 
+          ### Development
           - [[Plugin Development|Plugin-Development]]
           - [[TypeScript Guide|TYPESCRIPT_PLUGIN_GUIDE]]
           - [[Contributing]]
+
+          ### Security & Compliance
+          - [[Security]]
+
+          ### Roadmap
+          - [[Planned Plugins|Planned-Plugins]]
           SIDEBAR_EOF
 
           # Remove leading spaces from sidebar

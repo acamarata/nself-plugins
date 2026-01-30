@@ -1597,14 +1597,481 @@ curl http://localhost:3001/api/status
 
 ---
 
+## Performance Considerations
+
+### Rate Limiting
+
+The Stripe plugin includes built-in rate limiting to prevent hitting Stripe's API limits:
+
+- **Default Rate**: 25 requests per second per API key
+- **Burst Handling**: Automatic queueing of requests during high load
+- **Exponential Backoff**: Automatic retry with exponential backoff on rate limit errors
+
+```typescript
+// Configured automatically in client.ts
+const rateLimiter = new RateLimiter(25); // 25 req/sec
+```
+
+### Database Performance
+
+For optimal performance with large datasets:
+
+```sql
+-- Create additional indexes for common query patterns
+CREATE INDEX CONCURRENTLY idx_stripe_subscriptions_cancel_at
+    ON stripe_subscriptions(cancel_at) WHERE cancel_at IS NOT NULL;
+
+CREATE INDEX CONCURRENTLY idx_stripe_invoices_amount
+    ON stripe_invoices(amount_due DESC) WHERE status = 'open';
+
+CREATE INDEX CONCURRENTLY idx_stripe_customers_balance
+    ON stripe_customers(balance) WHERE balance != 0;
+
+-- Analyze tables for query optimization
+ANALYZE stripe_customers;
+ANALYZE stripe_subscriptions;
+ANALYZE stripe_invoices;
+```
+
+### Sync Optimization
+
+**Incremental Sync Strategy:**
+```bash
+# Full sync (first time only)
+nself plugin stripe sync
+
+# Incremental sync (daily via cron)
+0 */6 * * * nself plugin stripe sync --incremental --since "6 hours ago"
+```
+
+**Parallel Sync:**
+```typescript
+// Sync multiple resources in parallel
+await Promise.all([
+  syncCustomers({ incremental: true }),
+  syncSubscriptions({ incremental: true }),
+  syncInvoices({ incremental: true }),
+]);
+```
+
+### Connection Pooling
+
+For high-traffic deployments:
+
+```bash
+# Increase PostgreSQL connection pool
+DATABASE_URL="postgresql://user:pass@localhost:5432/nself?pool_max=20&pool_min=5"
+```
+
+### Memory Management
+
+Monitor memory usage for large syncs:
+
+```bash
+# Set Node.js heap size
+NODE_OPTIONS="--max-old-space-size=4096" nself plugin stripe sync
+```
+
+---
+
+## Security Notes
+
+### API Key Management
+
+**Production Best Practices:**
+
+1. **Use Restricted Keys**: Create a restricted Stripe API key with only read permissions
+2. **Key Rotation**: Rotate API keys every 90 days
+3. **Environment Separation**: Use different keys for test/live environments
+4. **Secret Storage**: Never commit API keys to git; use environment variables
+
+```bash
+# Set via environment variable
+export STRIPE_API_KEY="sk_live_..."
+
+# Or use a secret manager
+aws secretsmanager get-secret-value --secret-id stripe-api-key
+```
+
+### Webhook Security
+
+**Signature Verification:**
+The plugin automatically verifies all incoming webhooks using Stripe's signature verification:
+
+```typescript
+// Automatic verification in webhooks.ts
+function verifyWebhookSignature(
+  payload: string,
+  signature: string,
+  secret: string
+): boolean {
+  // HMAC-SHA256 verification with timestamp validation
+  // Protects against replay attacks (5-minute tolerance)
+}
+```
+
+**Webhook Security Checklist:**
+- [ ] HTTPS endpoint (required)
+- [ ] Signature verification enabled (STRIPE_WEBHOOK_SECRET set)
+- [ ] 5-minute timestamp tolerance enforced
+- [ ] Raw request body preserved (no parsing before verification)
+- [ ] Webhook events logged for audit trail
+
+### Data Security
+
+**Sensitive Data Handling:**
+
+```sql
+-- Encrypt sensitive customer data at rest
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Example: Encrypt customer notes (if needed)
+ALTER TABLE stripe_customers
+    ADD COLUMN encrypted_notes BYTEA;
+
+-- Store encrypted:
+-- pgp_sym_encrypt('sensitive text', 'encryption_key')
+
+-- Retrieve decrypted:
+-- pgp_sym_decrypt(encrypted_notes, 'encryption_key')
+```
+
+**PCI Compliance:**
+- Plugin never stores full credit card numbers
+- Only stores Stripe payment method IDs (e.g., `pm_xxx`)
+- All payment data remains in Stripe's PCI-compliant environment
+
+### Access Control
+
+**Database Permissions:**
+```sql
+-- Create read-only user for analytics
+CREATE USER stripe_readonly WITH PASSWORD 'secure_password';
+GRANT CONNECT ON DATABASE nself TO stripe_readonly;
+GRANT USAGE ON SCHEMA public TO stripe_readonly;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO stripe_readonly;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT SELECT ON TABLES TO stripe_readonly;
+
+-- Create restricted user for plugin (no DELETE)
+CREATE USER stripe_plugin WITH PASSWORD 'secure_password';
+GRANT CONNECT ON DATABASE nself TO stripe_plugin;
+GRANT USAGE ON SCHEMA public TO stripe_plugin;
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO stripe_plugin;
+```
+
+### Network Security
+
+**Firewall Rules:**
+```bash
+# Allow only Stripe webhook IPs
+# Stripe IP ranges: https://stripe.com/docs/ips
+
+# Example iptables rules
+iptables -A INPUT -p tcp --dport 3001 -s 3.18.12.63/32 -j ACCEPT
+iptables -A INPUT -p tcp --dport 3001 -s 3.130.192.231/32 -j ACCEPT
+# ... add all Stripe IPs
+```
+
+**Rate Limiting:**
+```nginx
+# Nginx rate limiting for webhook endpoint
+limit_req_zone $binary_remote_addr zone=stripe_webhook:10m rate=10r/s;
+
+location /webhook {
+    limit_req zone=stripe_webhook burst=20;
+    proxy_pass http://localhost:3001;
+}
+```
+
+---
+
+## Advanced Code Examples
+
+### Custom Sync Logic
+
+```typescript
+import { StripeClient, DatabaseService } from '@nself/stripe-plugin';
+
+async function syncCustomSegment() {
+  const client = new StripeClient(process.env.STRIPE_API_KEY);
+  const db = new DatabaseService();
+
+  // Sync only enterprise customers
+  const customers = await client.listCustomers({
+    limit: 100,
+    // Use Stripe metadata for filtering
+  });
+
+  for (const customer of customers) {
+    if (customer.metadata.segment === 'enterprise') {
+      await db.upsertCustomer(customer);
+    }
+  }
+}
+```
+
+### Real-time MRR Calculation
+
+```typescript
+import { DatabaseService } from '@nself/stripe-plugin';
+
+async function calculateRealTimeMRR(): Promise<number> {
+  const db = new DatabaseService();
+
+  const result = await db.query(`
+    SELECT SUM(
+      CASE
+        WHEN p.recurring_interval = 'month' THEN p.unit_amount
+        WHEN p.recurring_interval = 'year' THEN p.unit_amount / 12
+        WHEN p.recurring_interval = 'week' THEN p.unit_amount * 4.33
+        WHEN p.recurring_interval = 'day' THEN p.unit_amount * 30
+        ELSE 0
+      END * si.quantity
+    ) AS mrr_cents
+    FROM stripe_subscriptions s
+    JOIN stripe_subscription_items si ON s.id = si.subscription_id
+    JOIN stripe_prices p ON si.price_id = p.id
+    WHERE s.status IN ('active', 'trialing')
+  `);
+
+  return result.rows[0].mrr_cents / 100;
+}
+```
+
+### Churn Prediction
+
+```typescript
+async function identifyChurnRisk() {
+  const db = new DatabaseService();
+
+  return db.query(`
+    SELECT
+      c.id,
+      c.email,
+      c.name,
+      s.current_period_end,
+      s.cancel_at_period_end,
+      COUNT(i.*) FILTER (WHERE i.status = 'open') AS unpaid_invoices,
+      COUNT(pi.*) FILTER (WHERE pi.status = 'requires_payment_method') AS failed_payments
+    FROM stripe_customers c
+    JOIN stripe_subscriptions s ON c.id = s.customer_id
+    LEFT JOIN stripe_invoices i ON c.id = i.customer_id
+        AND i.created_at > NOW() - INTERVAL '30 days'
+    LEFT JOIN stripe_payment_intents pi ON c.id = pi.customer_id
+        AND pi.created_at > NOW() - INTERVAL '30 days'
+    WHERE s.status = 'active'
+      AND (
+        s.cancel_at_period_end = TRUE
+        OR s.current_period_end < NOW() + INTERVAL '7 days'
+        OR COUNT(i.*) FILTER (WHERE i.status = 'open') > 0
+        OR COUNT(pi.*) FILTER (WHERE pi.status = 'requires_payment_method') > 1
+      )
+    GROUP BY c.id, c.email, c.name, s.current_period_end, s.cancel_at_period_end
+    ORDER BY s.current_period_end
+  `);
+}
+```
+
+### Subscription Lifecycle Webhooks
+
+```typescript
+import { FastifyRequest, FastifyReply } from 'fastify';
+
+async function handleSubscriptionWebhook(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const event = request.body as StripeEvent;
+
+  switch (event.type) {
+    case 'customer.subscription.created':
+      await handleSubscriptionCreated(event.data.object);
+      break;
+
+    case 'customer.subscription.trial_will_end':
+      // Send reminder email 3 days before trial ends
+      const subscription = event.data.object;
+      await sendTrialEndingEmail(subscription.customer, subscription.trial_end);
+      break;
+
+    case 'customer.subscription.deleted':
+      // Log churn and send exit survey
+      await logChurnEvent(event.data.object);
+      await sendExitSurvey(event.data.object.customer);
+      break;
+
+    case 'invoice.payment_failed':
+      // Implement dunning management
+      const invoice = event.data.object;
+      await handleFailedPayment(invoice);
+      break;
+  }
+
+  reply.send({ received: true });
+}
+
+async function handleFailedPayment(invoice: Stripe.Invoice) {
+  const attemptCount = invoice.attempt_count || 0;
+
+  if (attemptCount === 1) {
+    await sendPaymentFailedEmail(invoice.customer, invoice);
+  } else if (attemptCount === 2) {
+    await sendFinalNotice(invoice.customer, invoice);
+  } else if (attemptCount >= 3) {
+    await pauseSubscription(invoice.subscription);
+  }
+}
+```
+
+### Dunning Management
+
+```sql
+-- Create dunning management view
+CREATE VIEW stripe_dunning_candidates AS
+SELECT
+  c.id AS customer_id,
+  c.email,
+  c.name,
+  s.id AS subscription_id,
+  i.id AS invoice_id,
+  i.amount_due / 100.0 AS amount,
+  i.attempt_count,
+  i.next_payment_attempt,
+  CASE
+    WHEN i.attempt_count = 1 THEN 'Send reminder email'
+    WHEN i.attempt_count = 2 THEN 'Send urgent notice'
+    WHEN i.attempt_count >= 3 THEN 'Pause subscription'
+  END AS recommended_action
+FROM stripe_customers c
+JOIN stripe_subscriptions s ON c.id = s.customer_id
+JOIN stripe_invoices i ON s.latest_invoice = i.id
+WHERE i.status IN ('open', 'uncollectible')
+  AND s.status = 'active'
+ORDER BY i.attempt_count DESC, i.next_payment_attempt;
+```
+
+### Revenue Recognition
+
+```sql
+-- Deferred revenue calculation
+CREATE VIEW stripe_deferred_revenue AS
+SELECT
+  DATE_TRUNC('month', s.current_period_start) AS period_month,
+  SUM(
+    CASE
+      WHEN p.recurring_interval = 'month' THEN p.unit_amount
+      WHEN p.recurring_interval = 'year' THEN p.unit_amount / 12
+    END * si.quantity
+  ) / 100.0 AS monthly_recognized_revenue,
+  COUNT(DISTINCT s.id) AS active_subscriptions
+FROM stripe_subscriptions s
+JOIN stripe_subscription_items si ON s.id = si.subscription_id
+JOIN stripe_prices p ON si.price_id = p.id
+WHERE s.status IN ('active', 'trialing')
+  AND s.current_period_start >= DATE_TRUNC('month', NOW() - INTERVAL '12 months')
+GROUP BY DATE_TRUNC('month', s.current_period_start)
+ORDER BY period_month DESC;
+```
+
+---
+
+## Monitoring & Alerting
+
+### Health Checks
+
+```bash
+# Monitor sync health
+*/5 * * * * curl -s http://localhost:3001/health | jq -e '.status == "ok"' || alert-team
+
+# Monitor webhook processing
+*/10 * * * * psql $DATABASE_URL -c "SELECT COUNT(*) FROM stripe_webhook_events WHERE processed = FALSE AND received_at < NOW() - INTERVAL '1 hour'" | grep -q "^0$" || alert-team
+```
+
+### Key Metrics to Monitor
+
+```sql
+-- Failed webhook events
+SELECT COUNT(*) FROM stripe_webhook_events
+WHERE processed = FALSE
+  AND received_at > NOW() - INTERVAL '24 hours';
+
+-- Sync lag (time since last successful sync)
+SELECT MAX(synced_at) AS last_sync,
+       NOW() - MAX(synced_at) AS lag
+FROM stripe_customers;
+
+-- Failed payments last 24h
+SELECT COUNT(*) FROM stripe_payment_intents
+WHERE status IN ('requires_payment_method', 'canceled')
+  AND created_at > NOW() - INTERVAL '24 hours';
+
+-- Subscription churn rate (monthly)
+WITH current_month AS (
+  SELECT COUNT(*) AS total
+  FROM stripe_subscriptions
+  WHERE status = 'active'
+    AND created_at < DATE_TRUNC('month', NOW())
+),
+churned_this_month AS (
+  SELECT COUNT(*) AS churned
+  FROM stripe_subscriptions
+  WHERE status = 'canceled'
+    AND canceled_at >= DATE_TRUNC('month', NOW())
+)
+SELECT
+  churned::DECIMAL / NULLIF(total, 0) * 100 AS churn_rate_pct
+FROM current_month, churned_this_month;
+```
+
+### Prometheus Metrics
+
+```typescript
+import { Registry, Counter, Gauge, Histogram } from 'prom-client';
+
+const registry = new Registry();
+
+// Define metrics
+const webhookCounter = new Counter({
+  name: 'stripe_webhooks_total',
+  help: 'Total Stripe webhooks received',
+  labelNames: ['type', 'status'],
+  registers: [registry]
+});
+
+const syncDuration = new Histogram({
+  name: 'stripe_sync_duration_seconds',
+  help: 'Stripe sync duration',
+  labelNames: ['resource'],
+  registers: [registry]
+});
+
+const mrrGauge = new Gauge({
+  name: 'stripe_mrr_cents',
+  help: 'Monthly recurring revenue in cents',
+  registers: [registry]
+});
+
+// Export metrics endpoint
+app.get('/metrics', async (req, reply) => {
+  reply.header('Content-Type', registry.contentType);
+  return registry.metrics();
+});
+```
+
+---
+
 ## Support
 
 - **GitHub Issues:** [nself-plugins/issues](https://github.com/acamarata/nself-plugins/issues)
 - **Stripe Documentation:** [stripe.com/docs/api](https://stripe.com/docs/api)
 - **Stripe API Changelog:** [stripe.com/docs/upgrades](https://stripe.com/docs/upgrades)
+- **Stripe Support:** [support.stripe.com](https://support.stripe.com)
+- **Plugin Documentation:** [github.com/acamarata/nself-plugins/wiki/Stripe](https://github.com/acamarata/nself-plugins/wiki/Stripe)
 
 ---
 
-*Last Updated: January 24, 2026*
+*Last Updated: January 30, 2026*
 *Plugin Version: 1.0.0*
 *Stripe API Version: 2024-12-18*
+*nself Version: 0.4.8+*

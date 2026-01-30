@@ -801,6 +801,946 @@ GROUP BY r.full_name, w.name;
 
 ---
 
+## Performance Considerations
+
+### Rate Limiting
+
+GitHub has different rate limits depending on authentication type:
+
+- **Authenticated requests**: 5,000 requests per hour
+- **Search API**: 30 requests per minute
+- **GraphQL API**: 5,000 points per hour
+
+The plugin includes built-in rate limiting to prevent hitting GitHub's API limits:
+
+```typescript
+// Configured automatically in client.ts
+const rateLimiter = new RateLimiter(5000 / 3600); // ~1.4 req/sec to stay under hourly limit
+```
+
+**Rate Limit Best Practices:**
+- Use incremental sync to minimize API calls
+- Enable webhooks for real-time updates (no API calls required)
+- Monitor rate limit headers: `X-RateLimit-Remaining`, `X-RateLimit-Reset`
+- Use conditional requests with ETags when possible
+
+### Database Performance
+
+For optimal performance with large repositories:
+
+```sql
+-- Create additional indexes for common query patterns
+CREATE INDEX CONCURRENTLY idx_github_issues_labels
+    ON github_issues USING GIN(labels);
+
+CREATE INDEX CONCURRENTLY idx_github_prs_merged_at
+    ON github_pull_requests(merged_at DESC) WHERE merged = TRUE;
+
+CREATE INDEX CONCURRENTLY idx_github_commits_author_email
+    ON github_commits(author_email);
+
+CREATE INDEX CONCURRENTLY idx_github_workflow_runs_conclusion
+    ON github_workflow_runs(conclusion) WHERE conclusion != 'success';
+
+-- Partial index for open items only
+CREATE INDEX CONCURRENTLY idx_github_issues_open
+    ON github_issues(created_at DESC) WHERE state = 'open';
+
+CREATE INDEX CONCURRENTLY idx_github_prs_open
+    ON github_pull_requests(created_at DESC) WHERE state = 'open';
+
+-- Analyze tables for query optimization
+ANALYZE github_repositories;
+ANALYZE github_issues;
+ANALYZE github_pull_requests;
+ANALYZE github_commits;
+ANALYZE github_workflow_runs;
+```
+
+### Sync Optimization
+
+**Incremental Sync Strategy:**
+```bash
+# Full sync (first time only)
+nself-github sync
+
+# Incremental sync (hourly via cron)
+0 * * * * nself-github sync --incremental --since "1 hour ago"
+
+# Sync specific repositories only
+*/15 * * * * nself-github sync --repo owner/critical-repo --incremental
+```
+
+**Parallel Sync:**
+```typescript
+// Sync multiple resources in parallel
+await Promise.all([
+  syncRepositories({ incremental: true }),
+  syncIssues({ incremental: true, since: lastSync }),
+  syncPullRequests({ incremental: true, since: lastSync }),
+  syncWorkflowRuns({ incremental: true, since: lastSync }),
+]);
+```
+
+**Pagination Strategy:**
+```typescript
+// Use cursor-based pagination for large datasets
+async function* paginateIssues(owner: string, repo: string) {
+  let cursor: string | undefined;
+
+  while (true) {
+    const response = await octokit.issues.listForRepo({
+      owner,
+      repo,
+      per_page: 100,
+      page: cursor ? parseInt(cursor) : 1,
+    });
+
+    if (response.data.length === 0) break;
+
+    yield response.data;
+    cursor = (parseInt(cursor || '1') + 1).toString();
+  }
+}
+```
+
+### Connection Pooling
+
+For high-traffic deployments:
+
+```bash
+# Increase PostgreSQL connection pool
+DATABASE_URL="postgresql://user:pass@localhost:5432/nself?pool_max=20&pool_min=5"
+```
+
+### Memory Management
+
+Monitor memory usage for large repositories:
+
+```bash
+# Set Node.js heap size for large syncs
+NODE_OPTIONS="--max-old-space-size=4096" nself-github sync
+
+# Use streaming for commit history
+nself-github sync commits --stream
+```
+
+---
+
+## Security Notes
+
+### Token Management
+
+**Production Best Practices:**
+
+1. **Use Fine-Grained Personal Access Tokens (PAT)**: Limit access to specific repositories and permissions
+2. **Token Rotation**: Rotate tokens every 90 days
+3. **Minimal Permissions**: Only grant read permissions required for sync
+4. **Secret Storage**: Never commit tokens to git; use environment variables or secret managers
+
+```bash
+# Set via environment variable
+export GITHUB_TOKEN="ghp_..."
+
+# Or use a secret manager
+aws secretsmanager get-secret-value --secret-id github-token
+
+# Or use GitHub Actions secrets
+- uses: actions/checkout@v4
+  with:
+    token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+**Fine-Grained Token Setup:**
+1. GitHub Settings → Developer Settings → Personal Access Tokens → Fine-grained tokens
+2. Set expiration (max 1 year recommended)
+3. Select specific repositories or all repositories
+4. Grant permissions:
+   - Issues: Read-only
+   - Pull requests: Read-only
+   - Contents: Read-only
+   - Metadata: Read-only (automatically included)
+   - Workflows: Read-only
+   - Deployments: Read-only
+
+### Webhook Security
+
+**Signature Verification:**
+The plugin automatically verifies all incoming webhooks using HMAC-SHA256:
+
+```typescript
+// Automatic verification in webhooks.ts
+function verifyWebhookSignature(
+  payload: string,
+  signature: string,
+  secret: string
+): boolean {
+  const hmac = crypto.createHmac('sha256', secret);
+  const digest = 'sha256=' + hmac.update(payload).digest('hex');
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(digest)
+  );
+}
+```
+
+**Webhook Security Checklist:**
+- [ ] HTTPS endpoint (required by GitHub)
+- [ ] Signature verification enabled (GITHUB_WEBHOOK_SECRET set)
+- [ ] Raw request body preserved (no parsing before verification)
+- [ ] Webhook events logged for audit trail
+- [ ] IP allowlist configured (optional but recommended)
+- [ ] Rate limiting on webhook endpoint
+
+**GitHub Webhook IP Ranges:**
+```bash
+# Get current GitHub webhook IPs
+curl https://api.github.com/meta | jq -r '.hooks[]'
+
+# Example firewall rules
+iptables -A INPUT -p tcp --dport 3002 -s 192.30.252.0/22 -j ACCEPT
+iptables -A INPUT -p tcp --dport 3002 -s 185.199.108.0/22 -j ACCEPT
+iptables -A INPUT -p tcp --dport 3002 -s 140.82.112.0/20 -j ACCEPT
+```
+
+### Access Control
+
+**Database Permissions:**
+```sql
+-- Create read-only user for analytics
+CREATE USER github_readonly WITH PASSWORD 'secure_password';
+GRANT CONNECT ON DATABASE nself TO github_readonly;
+GRANT USAGE ON SCHEMA public TO github_readonly;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO github_readonly;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT SELECT ON TABLES TO github_readonly;
+
+-- Create restricted user for plugin (no DELETE)
+CREATE USER github_plugin WITH PASSWORD 'secure_password';
+GRANT CONNECT ON DATABASE nself TO github_plugin;
+GRANT USAGE ON SCHEMA public TO github_plugin;
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO github_plugin;
+```
+
+**API Access Logging:**
+```typescript
+// Log all API requests for security audit
+const logger = createLogger('github:api');
+
+octokit.hook.before('request', async (options) => {
+  logger.info('API request', {
+    method: options.method,
+    url: options.url,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+octokit.hook.after('request', async (response, options) => {
+  logger.info('API response', {
+    status: response.status,
+    rateLimit: response.headers['x-ratelimit-remaining'],
+  });
+});
+```
+
+### Data Privacy
+
+**Sensitive Data Handling:**
+
+```sql
+-- Audit log for sensitive operations
+CREATE TABLE github_audit_log (
+    id SERIAL PRIMARY KEY,
+    action VARCHAR(100) NOT NULL,
+    user_id VARCHAR(255),
+    resource_type VARCHAR(50),
+    resource_id VARCHAR(255),
+    details JSONB,
+    ip_address INET,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Log webhook processing
+INSERT INTO github_audit_log (action, resource_type, resource_id, details)
+VALUES ('webhook_received', 'pull_request', $1, $2);
+```
+
+**GDPR Compliance:**
+```sql
+-- Anonymize user data for GDPR compliance
+UPDATE github_issues
+SET user_login = 'anonymized_user_' || id,
+    assignees = '[]'::jsonb
+WHERE user_id = $1;
+
+UPDATE github_pull_requests
+SET user_login = 'anonymized_user_' || id,
+    assignees = '[]'::jsonb
+WHERE user_id = $1;
+
+UPDATE github_commits
+SET author_email = 'anonymized@example.com',
+    committer_email = 'anonymized@example.com'
+WHERE author_email = $1 OR committer_email = $1;
+```
+
+### Network Security
+
+**Rate Limiting:**
+```nginx
+# Nginx rate limiting for webhook endpoint
+limit_req_zone $binary_remote_addr zone=github_webhook:10m rate=10r/s;
+
+location /webhook {
+    limit_req zone=github_webhook burst=20;
+    proxy_pass http://localhost:3002;
+}
+```
+
+**TLS Configuration:**
+```nginx
+# Strong TLS configuration
+ssl_protocols TLSv1.2 TLSv1.3;
+ssl_ciphers HIGH:!aNULL:!MD5;
+ssl_prefer_server_ciphers on;
+
+# HTTPS only
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+```
+
+---
+
+## Advanced Code Examples
+
+### CI/CD Pipeline Metrics
+
+Track build success rates and durations:
+
+```typescript
+import { DatabaseService } from '@nself/github-plugin';
+
+async function calculateCICDMetrics(repoId: bigint, days: number = 30) {
+  const db = new DatabaseService();
+
+  const metrics = await db.query(`
+    SELECT
+      w.name AS workflow_name,
+      COUNT(*) AS total_runs,
+      COUNT(*) FILTER (WHERE w.conclusion = 'success') AS successful,
+      COUNT(*) FILTER (WHERE w.conclusion = 'failure') AS failed,
+      COUNT(*) FILTER (WHERE w.conclusion = 'cancelled') AS cancelled,
+      ROUND(
+        COUNT(*) FILTER (WHERE w.conclusion = 'success')::NUMERIC /
+        NULLIF(COUNT(*), 0) * 100, 2
+      ) AS success_rate,
+      AVG(
+        EXTRACT(EPOCH FROM (w.updated_at - w.run_started_at))
+      )::INTEGER AS avg_duration_seconds,
+      MIN(
+        EXTRACT(EPOCH FROM (w.updated_at - w.run_started_at))
+      )::INTEGER AS min_duration_seconds,
+      MAX(
+        EXTRACT(EPOCH FROM (w.updated_at - w.run_started_at))
+      )::INTEGER AS max_duration_seconds,
+      PERCENTILE_CONT(0.5) WITHIN GROUP (
+        ORDER BY EXTRACT(EPOCH FROM (w.updated_at - w.run_started_at))
+      )::INTEGER AS median_duration_seconds
+    FROM github_workflow_runs w
+    WHERE w.repo_id = $1
+      AND w.created_at > NOW() - INTERVAL '${days} days'
+      AND w.status = 'completed'
+    GROUP BY w.name
+    ORDER BY total_runs DESC
+  `, [repoId]);
+
+  return metrics.rows;
+}
+```
+
+### Team Productivity Dashboard
+
+Analyze team contributions and velocity:
+
+```sql
+-- Developer productivity metrics
+CREATE VIEW github_developer_metrics AS
+WITH developer_commits AS (
+  SELECT
+    c.author_name,
+    c.author_email,
+    DATE_TRUNC('week', c.author_date) AS week,
+    COUNT(*) AS commits,
+    SUM(c.additions) AS lines_added,
+    SUM(c.deletions) AS lines_deleted,
+    SUM(c.additions + c.deletions) AS lines_changed,
+    COUNT(DISTINCT c.repo_id) AS repos_contributed
+  FROM github_commits c
+  WHERE c.author_date > NOW() - INTERVAL '90 days'
+  GROUP BY c.author_name, c.author_email, DATE_TRUNC('week', c.author_date)
+),
+developer_prs AS (
+  SELECT
+    p.user_login,
+    DATE_TRUNC('week', p.created_at) AS week,
+    COUNT(*) AS prs_created,
+    COUNT(*) FILTER (WHERE p.merged = TRUE) AS prs_merged,
+    AVG(
+      EXTRACT(EPOCH FROM (p.merged_at - p.created_at)) / 3600
+    ) AS avg_merge_time_hours
+  FROM github_pull_requests p
+  WHERE p.created_at > NOW() - INTERVAL '90 days'
+  GROUP BY p.user_login, DATE_TRUNC('week', p.created_at)
+),
+developer_reviews AS (
+  SELECT
+    r.user_login,
+    DATE_TRUNC('week', r.submitted_at) AS week,
+    COUNT(*) AS reviews_submitted,
+    COUNT(*) FILTER (WHERE r.state = 'approved') AS reviews_approved,
+    COUNT(*) FILTER (WHERE r.state = 'changes_requested') AS reviews_requested_changes
+  FROM github_pr_reviews r
+  WHERE r.submitted_at > NOW() - INTERVAL '90 days'
+  GROUP BY r.user_login, DATE_TRUNC('week', r.submitted_at)
+)
+SELECT
+  COALESCE(dc.author_name, dp.user_login, dr.user_login) AS developer,
+  COALESCE(dc.week, dp.week, dr.week) AS week,
+  COALESCE(dc.commits, 0) AS commits,
+  COALESCE(dc.lines_changed, 0) AS lines_changed,
+  COALESCE(dc.repos_contributed, 0) AS repos_contributed,
+  COALESCE(dp.prs_created, 0) AS prs_created,
+  COALESCE(dp.prs_merged, 0) AS prs_merged,
+  COALESCE(dp.avg_merge_time_hours, 0) AS avg_pr_merge_hours,
+  COALESCE(dr.reviews_submitted, 0) AS reviews_submitted,
+  COALESCE(dr.reviews_approved, 0) AS reviews_approved
+FROM developer_commits dc
+FULL OUTER JOIN developer_prs dp
+  ON dc.author_name = dp.user_login AND dc.week = dp.week
+FULL OUTER JOIN developer_reviews dr
+  ON COALESCE(dc.author_name, dp.user_login) = dr.user_login
+  AND COALESCE(dc.week, dp.week) = dr.week
+ORDER BY week DESC, commits DESC;
+```
+
+### Code Review Analytics
+
+Track PR review quality and speed:
+
+```typescript
+async function analyzeCodeReviewMetrics(repoId: bigint) {
+  const db = new DatabaseService();
+
+  return db.query(`
+    WITH pr_metrics AS (
+      SELECT
+        p.id,
+        p.number,
+        p.title,
+        p.user_login AS author,
+        p.created_at,
+        p.merged_at,
+        p.closed_at,
+        EXTRACT(EPOCH FROM (p.merged_at - p.created_at)) / 3600 AS hours_to_merge,
+        p.additions,
+        p.deletions,
+        p.changed_files,
+        (
+          SELECT COUNT(*)
+          FROM github_pr_reviews r
+          WHERE r.pull_request_id = p.id
+        ) AS review_count,
+        (
+          SELECT COUNT(DISTINCT user_login)
+          FROM github_pr_reviews r
+          WHERE r.pull_request_id = p.id
+        ) AS unique_reviewers,
+        (
+          SELECT MIN(submitted_at)
+          FROM github_pr_reviews r
+          WHERE r.pull_request_id = p.id
+        ) AS first_review_at,
+        (
+          SELECT COUNT(*)
+          FROM github_pr_review_comments c
+          WHERE c.pull_request_id = p.id
+        ) AS review_comments
+      FROM github_pull_requests p
+      WHERE p.repo_id = $1
+        AND p.merged = TRUE
+        AND p.merged_at > NOW() - INTERVAL '90 days'
+    )
+    SELECT
+      author,
+      COUNT(*) AS total_prs,
+      ROUND(AVG(hours_to_merge), 2) AS avg_hours_to_merge,
+      ROUND(AVG(review_count), 2) AS avg_reviews_per_pr,
+      ROUND(AVG(unique_reviewers), 2) AS avg_reviewers_per_pr,
+      ROUND(AVG(review_comments), 2) AS avg_comments_per_pr,
+      ROUND(AVG(
+        EXTRACT(EPOCH FROM (first_review_at - created_at)) / 3600
+      ), 2) AS avg_hours_to_first_review,
+      ROUND(AVG(additions + deletions), 0) AS avg_lines_changed
+    FROM pr_metrics
+    GROUP BY author
+    ORDER BY total_prs DESC
+  `, [repoId]);
+}
+```
+
+### Deployment Tracking
+
+Monitor deployment frequency and success:
+
+```typescript
+async function trackDeploymentMetrics() {
+  const db = new DatabaseService();
+
+  return db.query(`
+    WITH deployment_stats AS (
+      SELECT
+        r.full_name AS repository,
+        d.environment,
+        DATE_TRUNC('week', d.created_at) AS week,
+        COUNT(*) AS total_deployments,
+        COUNT(*) FILTER (WHERE d.status = 'success') AS successful,
+        COUNT(*) FILTER (WHERE d.status = 'failure') AS failed,
+        AVG(
+          EXTRACT(EPOCH FROM (d.updated_at - d.created_at))
+        )::INTEGER AS avg_duration_seconds
+      FROM github_deployments d
+      JOIN github_repositories r ON d.repo_id = r.id
+      WHERE d.created_at > NOW() - INTERVAL '90 days'
+      GROUP BY r.full_name, d.environment, DATE_TRUNC('week', d.created_at)
+    )
+    SELECT
+      repository,
+      environment,
+      week,
+      total_deployments,
+      successful,
+      failed,
+      ROUND(successful::NUMERIC / NULLIF(total_deployments, 0) * 100, 2) AS success_rate,
+      avg_duration_seconds,
+      ROUND(avg_duration_seconds / 60.0, 2) AS avg_duration_minutes
+    FROM deployment_stats
+    ORDER BY week DESC, repository, environment
+  `);
+}
+```
+
+### Issue Triage Automation
+
+Automatically categorize and prioritize issues:
+
+```typescript
+async function autoTriageIssues() {
+  const db = new DatabaseService();
+
+  // Identify stale issues
+  await db.query(`
+    UPDATE github_issues
+    SET metadata = metadata || jsonb_build_object('triage_status', 'stale')
+    WHERE state = 'open'
+      AND updated_at < NOW() - INTERVAL '90 days'
+      AND NOT (metadata->>'triage_status' = 'stale')
+  `);
+
+  // Identify high-priority bugs
+  await db.query(`
+    UPDATE github_issues
+    SET metadata = metadata || jsonb_build_object('priority', 'high')
+    WHERE state = 'open'
+      AND EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(labels) AS label
+        WHERE label->>'name' IN ('bug', 'critical', 'urgent')
+      )
+      AND NOT (metadata->>'priority' IS NOT NULL)
+  `);
+
+  // Calculate SLA breach risk
+  const slaRisk = await db.query(`
+    SELECT
+      i.id,
+      i.number,
+      i.title,
+      r.full_name AS repository,
+      i.created_at,
+      EXTRACT(DAYS FROM NOW() - i.created_at) AS days_open,
+      CASE
+        WHEN EXISTS (
+          SELECT 1 FROM jsonb_array_elements(i.labels) AS l
+          WHERE l->>'name' = 'critical'
+        ) THEN 1  -- 1 day SLA
+        WHEN EXISTS (
+          SELECT 1 FROM jsonb_array_elements(i.labels) AS l
+          WHERE l->>'name' = 'bug'
+        ) THEN 7  -- 7 day SLA
+        ELSE 30   -- 30 day SLA
+      END AS sla_days,
+      CASE
+        WHEN EXTRACT(DAYS FROM NOW() - i.created_at) > (
+          CASE
+            WHEN EXISTS (
+              SELECT 1 FROM jsonb_array_elements(i.labels) AS l
+              WHERE l->>'name' = 'critical'
+            ) THEN 1
+            WHEN EXISTS (
+              SELECT 1 FROM jsonb_array_elements(i.labels) AS l
+              WHERE l->>'name' = 'bug'
+            ) THEN 7
+            ELSE 30
+          END
+        ) THEN 'BREACHED'
+        ELSE 'OK'
+      END AS sla_status
+    FROM github_issues i
+    JOIN github_repositories r ON i.repo_id = r.id
+    WHERE i.state = 'open'
+    ORDER BY days_open DESC
+  `);
+
+  return slaRisk.rows;
+}
+```
+
+### Release Notes Generation
+
+Automatically generate release notes from commits and PRs:
+
+```typescript
+async function generateReleaseNotes(
+  repoId: bigint,
+  fromTag: string,
+  toTag: string
+) {
+  const db = new DatabaseService();
+
+  const notes = await db.query(`
+    WITH release_commits AS (
+      SELECT c.*
+      FROM github_commits c
+      WHERE c.repo_id = $1
+        AND c.author_date >= (
+          SELECT created_at FROM github_releases
+          WHERE repo_id = $1 AND tag_name = $2
+        )
+        AND c.author_date <= (
+          SELECT created_at FROM github_releases
+          WHERE repo_id = $1 AND tag_name = $3
+        )
+    ),
+    release_prs AS (
+      SELECT DISTINCT p.*
+      FROM github_pull_requests p
+      JOIN release_commits c ON p.merge_commit_sha = c.sha
+      WHERE p.repo_id = $1
+        AND p.merged = TRUE
+    )
+    SELECT
+      'feat' AS type,
+      p.title,
+      p.number,
+      p.user_login AS author,
+      p.merged_at
+    FROM release_prs p
+    WHERE p.title ~* '^feat:|^feature:'
+
+    UNION ALL
+
+    SELECT
+      'fix' AS type,
+      p.title,
+      p.number,
+      p.user_login AS author,
+      p.merged_at
+    FROM release_prs p
+    WHERE p.title ~* '^fix:|^bugfix:'
+
+    UNION ALL
+
+    SELECT
+      'chore' AS type,
+      p.title,
+      p.number,
+      p.user_login AS author,
+      p.merged_at
+    FROM release_prs p
+    WHERE p.title ~* '^chore:|^refactor:|^docs:'
+
+    ORDER BY type, merged_at DESC
+  `, [repoId, fromTag, toTag]);
+
+  // Format as Markdown
+  const features = notes.rows.filter(n => n.type === 'feat');
+  const fixes = notes.rows.filter(n => n.type === 'fix');
+  const chores = notes.rows.filter(n => n.type === 'chore');
+
+  let markdown = `# Release Notes\n\n`;
+
+  if (features.length > 0) {
+    markdown += `## Features\n\n`;
+    features.forEach(f => {
+      markdown += `- ${f.title} (#${f.number}) @${f.author}\n`;
+    });
+    markdown += `\n`;
+  }
+
+  if (fixes.length > 0) {
+    markdown += `## Bug Fixes\n\n`;
+    fixes.forEach(f => {
+      markdown += `- ${f.title} (#${f.number}) @${f.author}\n`;
+    });
+    markdown += `\n`;
+  }
+
+  if (chores.length > 0) {
+    markdown += `## Other Changes\n\n`;
+    chores.forEach(f => {
+      markdown += `- ${f.title} (#${f.number}) @${f.author}\n`;
+    });
+  }
+
+  return markdown;
+}
+```
+
+---
+
+## Monitoring & Alerting
+
+### Health Checks
+
+```bash
+# Monitor sync health
+*/5 * * * * curl -s http://localhost:3002/health | jq -e '.status == "ok"' || alert-team
+
+# Monitor webhook processing
+*/10 * * * * psql $DATABASE_URL -c "SELECT COUNT(*) FROM github_webhook_events WHERE processed = FALSE AND received_at < NOW() - INTERVAL '1 hour'" | grep -q "^0$" || alert-team
+
+# Monitor rate limit
+*/15 * * * * curl -s http://localhost:3002/api/status | jq -e '.rate_limit.remaining > 1000' || alert-team
+```
+
+### Key Metrics to Monitor
+
+```sql
+-- Failed webhook events
+SELECT COUNT(*) AS failed_webhooks
+FROM github_webhook_events
+WHERE processed = FALSE
+  AND received_at > NOW() - INTERVAL '24 hours';
+
+-- Sync lag (time since last successful sync)
+SELECT
+  'repositories' AS resource,
+  MAX(synced_at) AS last_sync,
+  NOW() - MAX(synced_at) AS lag
+FROM github_repositories
+UNION ALL
+SELECT
+  'issues' AS resource,
+  MAX(synced_at) AS last_sync,
+  NOW() - MAX(synced_at) AS lag
+FROM github_issues
+UNION ALL
+SELECT
+  'pull_requests' AS resource,
+  MAX(synced_at) AS last_sync,
+  NOW() - MAX(synced_at) AS lag
+FROM github_pull_requests;
+
+-- Failed workflow runs (last 24h)
+SELECT COUNT(*) AS failed_workflows
+FROM github_workflow_runs
+WHERE conclusion = 'failure'
+  AND created_at > NOW() - INTERVAL '24 hours';
+
+-- Open issues aging report
+SELECT
+  CASE
+    WHEN created_at > NOW() - INTERVAL '7 days' THEN '0-7 days'
+    WHEN created_at > NOW() - INTERVAL '30 days' THEN '7-30 days'
+    WHEN created_at > NOW() - INTERVAL '90 days' THEN '30-90 days'
+    ELSE '90+ days'
+  END AS age_bucket,
+  COUNT(*) AS count
+FROM github_issues
+WHERE state = 'open'
+GROUP BY age_bucket
+ORDER BY age_bucket;
+
+-- PR merge time SLA
+WITH pr_merge_times AS (
+  SELECT
+    EXTRACT(EPOCH FROM (merged_at - created_at)) / 3600 AS hours_to_merge
+  FROM github_pull_requests
+  WHERE merged = TRUE
+    AND merged_at > NOW() - INTERVAL '30 days'
+)
+SELECT
+  COUNT(*) AS total_prs,
+  ROUND(AVG(hours_to_merge), 2) AS avg_hours,
+  ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY hours_to_merge), 2) AS median_hours,
+  ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY hours_to_merge), 2) AS p95_hours,
+  COUNT(*) FILTER (WHERE hours_to_merge > 24) AS over_24h,
+  ROUND(
+    COUNT(*) FILTER (WHERE hours_to_merge > 24)::NUMERIC / COUNT(*) * 100, 2
+  ) AS pct_over_24h
+FROM pr_merge_times;
+```
+
+### Prometheus Metrics
+
+```typescript
+import { Registry, Counter, Gauge, Histogram } from 'prom-client';
+
+const registry = new Registry();
+
+// Define metrics
+const webhookCounter = new Counter({
+  name: 'github_webhooks_total',
+  help: 'Total GitHub webhooks received',
+  labelNames: ['event_type', 'status'],
+  registers: [registry]
+});
+
+const syncDuration = new Histogram({
+  name: 'github_sync_duration_seconds',
+  help: 'GitHub sync duration',
+  labelNames: ['resource'],
+  buckets: [1, 5, 10, 30, 60, 120, 300, 600],
+  registers: [registry]
+});
+
+const rateLimitGauge = new Gauge({
+  name: 'github_rate_limit_remaining',
+  help: 'GitHub API rate limit remaining',
+  registers: [registry]
+});
+
+const openIssuesGauge = new Gauge({
+  name: 'github_open_issues_total',
+  help: 'Total open issues across all repositories',
+  registers: [registry]
+});
+
+const openPRsGauge = new Gauge({
+  name: 'github_open_prs_total',
+  help: 'Total open pull requests across all repositories',
+  registers: [registry]
+});
+
+const workflowFailuresCounter = new Counter({
+  name: 'github_workflow_failures_total',
+  help: 'Total failed workflow runs',
+  labelNames: ['repository', 'workflow'],
+  registers: [registry]
+});
+
+// Update gauges periodically
+async function updateMetrics() {
+  const db = new DatabaseService();
+
+  // Update rate limit
+  const rateLimit = await octokit.rateLimit.get();
+  rateLimitGauge.set(rateLimit.data.rate.remaining);
+
+  // Update open issues
+  const { rows: issueCount } = await db.query(
+    'SELECT COUNT(*) FROM github_issues WHERE state = $1',
+    ['open']
+  );
+  openIssuesGauge.set(parseInt(issueCount[0].count));
+
+  // Update open PRs
+  const { rows: prCount } = await db.query(
+    'SELECT COUNT(*) FROM github_pull_requests WHERE state = $1',
+    ['open']
+  );
+  openPRsGauge.set(parseInt(prCount[0].count));
+}
+
+// Export metrics endpoint
+app.get('/metrics', async (req, reply) => {
+  await updateMetrics();
+  reply.header('Content-Type', registry.contentType);
+  return registry.metrics();
+});
+```
+
+### Grafana Dashboard
+
+Example queries for Grafana:
+
+```promql
+# Webhook processing rate
+rate(github_webhooks_total[5m])
+
+# Failed webhooks percentage
+sum(rate(github_webhooks_total{status="failed"}[5m])) /
+sum(rate(github_webhooks_total[5m])) * 100
+
+# Average sync duration by resource
+avg(github_sync_duration_seconds) by (resource)
+
+# Rate limit usage
+100 - (github_rate_limit_remaining / 5000 * 100)
+
+# Open issues trend
+github_open_issues_total
+
+# Workflow failure rate
+rate(github_workflow_failures_total[1h])
+```
+
+### Alerting Rules
+
+```yaml
+# Prometheus alerting rules
+groups:
+  - name: github_plugin
+    interval: 1m
+    rules:
+      - alert: GitHubRateLimitLow
+        expr: github_rate_limit_remaining < 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GitHub API rate limit low"
+          description: "Only {{ $value }} requests remaining"
+
+      - alert: GitHubSyncStale
+        expr: time() - max(github_sync_last_timestamp) > 3600
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GitHub sync is stale"
+          description: "Last sync was {{ $value }}s ago"
+
+      - alert: GitHubWebhookFailures
+        expr: rate(github_webhooks_total{status="failed"}[15m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High GitHub webhook failure rate"
+          description: "{{ $value }} webhooks failing per second"
+
+      - alert: GitHubWorkflowFailures
+        expr: increase(github_workflow_failures_total[1h]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Multiple workflow failures detected"
+          description: "{{ $value }} workflows failed in the last hour"
+```
+
+---
+
 ## Use Cases
 
 ### 1. Engineering Metrics Dashboard
@@ -812,7 +1752,9 @@ Track development velocity and team performance:
 SELECT
     author_name,
     DATE_TRUNC('week', author_date) AS week,
-    COUNT(*) AS commits
+    COUNT(*) AS commits,
+    SUM(additions) AS lines_added,
+    SUM(deletions) AS lines_deleted
 FROM github_commits
 WHERE author_date > NOW() - INTERVAL '3 months'
 GROUP BY author_name, week
@@ -821,7 +1763,10 @@ ORDER BY week DESC, commits DESC;
 -- PR merge time (time from open to merge)
 SELECT
     r.full_name,
-    AVG(EXTRACT(EPOCH FROM (p.merged_at - p.created_at)) / 3600) AS avg_hours_to_merge
+    AVG(EXTRACT(EPOCH FROM (p.merged_at - p.created_at)) / 3600) AS avg_hours_to_merge,
+    PERCENTILE_CONT(0.5) WITHIN GROUP (
+      ORDER BY EXTRACT(EPOCH FROM (p.merged_at - p.created_at)) / 3600
+    ) AS median_hours_to_merge
 FROM github_pull_requests p
 JOIN github_repositories r ON p.repo_id = r.id
 WHERE p.merged = TRUE
@@ -834,17 +1779,38 @@ GROUP BY r.full_name;
 Monitor releases across repositories:
 
 ```sql
--- Recent releases
+-- Recent releases with download counts
 SELECT
     r.full_name,
     rel.tag_name,
     rel.name,
     rel.published_at,
-    rel.prerelease
+    rel.prerelease,
+    jsonb_array_length(rel.assets) AS asset_count,
+    (
+      SELECT SUM((asset->>'download_count')::INTEGER)
+      FROM jsonb_array_elements(rel.assets) AS asset
+    ) AS total_downloads
 FROM github_releases rel
 JOIN github_repositories r ON rel.repo_id = r.id
 ORDER BY rel.published_at DESC
 LIMIT 20;
+
+-- Release frequency by repository
+SELECT
+    r.full_name,
+    COUNT(*) AS total_releases,
+    COUNT(*) FILTER (WHERE rel.prerelease = FALSE) AS stable_releases,
+    MAX(rel.published_at) AS latest_release,
+    ROUND(
+      COUNT(*)::NUMERIC /
+      NULLIF(EXTRACT(DAYS FROM NOW() - MIN(rel.published_at)), 0) * 30, 2
+    ) AS avg_releases_per_month
+FROM github_releases rel
+JOIN github_repositories r ON rel.repo_id = r.id
+WHERE rel.published_at > NOW() - INTERVAL '1 year'
+GROUP BY r.full_name
+ORDER BY avg_releases_per_month DESC;
 ```
 
 ### 3. CI/CD Monitoring
@@ -852,18 +1818,43 @@ LIMIT 20;
 Track GitHub Actions performance:
 
 ```sql
--- Failed workflows in last 24 hours
+-- Failed workflows in last 24 hours with error details
 SELECT
     r.full_name,
     w.name,
     w.head_branch,
     w.actor_login,
-    w.created_at
+    w.conclusion,
+    w.run_number,
+    w.created_at,
+    (
+      SELECT COUNT(*)
+      FROM github_workflow_jobs j
+      WHERE j.run_id = w.id AND j.conclusion = 'failure'
+    ) AS failed_jobs
 FROM github_workflow_runs w
 JOIN github_repositories r ON w.repo_id = r.id
 WHERE w.conclusion = 'failure'
   AND w.created_at > NOW() - INTERVAL '24 hours'
 ORDER BY w.created_at DESC;
+
+-- Workflow reliability over time
+SELECT
+    r.full_name,
+    w.name AS workflow_name,
+    DATE_TRUNC('day', w.created_at) AS day,
+    COUNT(*) AS total_runs,
+    COUNT(*) FILTER (WHERE w.conclusion = 'success') AS successful,
+    ROUND(
+      COUNT(*) FILTER (WHERE w.conclusion = 'success')::NUMERIC /
+      NULLIF(COUNT(*), 0) * 100, 2
+    ) AS success_rate
+FROM github_workflow_runs w
+JOIN github_repositories r ON w.repo_id = r.id
+WHERE w.created_at > NOW() - INTERVAL '30 days'
+  AND w.status = 'completed'
+GROUP BY r.full_name, w.name, DATE_TRUNC('day', w.created_at)
+ORDER BY day DESC, success_rate;
 ```
 
 ### 4. Issue Tracking Analytics
@@ -871,15 +1862,316 @@ ORDER BY w.created_at DESC;
 Analyze issue patterns:
 
 ```sql
--- Open issues by label
+-- Open issues by label with average age
 SELECT
     label->>'name' AS label,
-    COUNT(*) AS count
+    COUNT(*) AS count,
+    ROUND(AVG(EXTRACT(DAYS FROM NOW() - i.created_at)), 1) AS avg_age_days,
+    COUNT(*) FILTER (WHERE i.created_at > NOW() - INTERVAL '7 days') AS new_this_week
 FROM github_issues i,
      LATERAL jsonb_array_elements(i.labels) AS label
 WHERE i.state = 'open'
 GROUP BY label->>'name'
 ORDER BY count DESC;
+
+-- Issue resolution time by label
+SELECT
+    label->>'name' AS label,
+    COUNT(*) AS closed_issues,
+    ROUND(AVG(EXTRACT(EPOCH FROM (i.closed_at - i.created_at)) / 3600), 2) AS avg_hours_to_close,
+    ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (
+      ORDER BY EXTRACT(EPOCH FROM (i.closed_at - i.created_at)) / 3600
+    ), 2) AS median_hours_to_close
+FROM github_issues i,
+     LATERAL jsonb_array_elements(i.labels) AS label
+WHERE i.state = 'closed'
+  AND i.closed_at > NOW() - INTERVAL '90 days'
+GROUP BY label->>'name'
+HAVING COUNT(*) >= 5
+ORDER BY avg_hours_to_close;
+```
+
+### 5. Code Review Quality Metrics
+
+Analyze PR review patterns:
+
+```sql
+-- Review thoroughness by reviewer
+SELECT
+    r.user_login AS reviewer,
+    COUNT(DISTINCT r.pull_request_id) AS prs_reviewed,
+    COUNT(*) FILTER (WHERE r.state = 'approved') AS approvals,
+    COUNT(*) FILTER (WHERE r.state = 'changes_requested') AS changes_requested,
+    ROUND(
+      COUNT(*) FILTER (WHERE r.state = 'approved')::NUMERIC /
+      NULLIF(COUNT(*), 0) * 100, 2
+    ) AS approval_rate,
+    (
+      SELECT AVG(comment_count)::INTEGER
+      FROM (
+        SELECT COUNT(*) AS comment_count
+        FROM github_pr_review_comments c
+        WHERE c.user_login = r.user_login
+        GROUP BY c.pull_request_id
+      ) AS comment_counts
+    ) AS avg_comments_per_pr
+FROM github_pr_reviews r
+WHERE r.submitted_at > NOW() - INTERVAL '90 days'
+GROUP BY r.user_login
+HAVING COUNT(DISTINCT r.pull_request_id) >= 10
+ORDER BY prs_reviewed DESC;
+```
+
+### 6. Repository Health Score
+
+Calculate repository health metrics:
+
+```sql
+CREATE VIEW github_repository_health AS
+WITH repo_metrics AS (
+  SELECT
+    r.id,
+    r.full_name,
+    r.language,
+    r.stargazers_count,
+    r.forks_count,
+    r.open_issues_count,
+    -- Recent activity
+    (
+      SELECT COUNT(*)
+      FROM github_commits c
+      WHERE c.repo_id = r.id
+        AND c.author_date > NOW() - INTERVAL '30 days'
+    ) AS commits_last_30d,
+    (
+      SELECT COUNT(*)
+      FROM github_pull_requests p
+      WHERE p.repo_id = r.id
+        AND p.created_at > NOW() - INTERVAL '30 days'
+    ) AS prs_last_30d,
+    (
+      SELECT COUNT(*)
+      FROM github_issues i
+      WHERE i.repo_id = r.id
+        AND i.state = 'open'
+        AND i.created_at < NOW() - INTERVAL '90 days'
+    ) AS stale_issues,
+    -- PR merge rate
+    (
+      SELECT
+        COUNT(*) FILTER (WHERE merged = TRUE)::NUMERIC /
+        NULLIF(COUNT(*), 0)
+      FROM github_pull_requests p
+      WHERE p.repo_id = r.id
+        AND p.created_at > NOW() - INTERVAL '90 days'
+    ) AS pr_merge_rate,
+    -- Average PR review time
+    (
+      SELECT AVG(EXTRACT(EPOCH FROM (merged_at - created_at)) / 3600)
+      FROM github_pull_requests p
+      WHERE p.repo_id = r.id
+        AND p.merged = TRUE
+        AND p.merged_at > NOW() - INTERVAL '90 days'
+    ) AS avg_pr_hours,
+    -- CI success rate
+    (
+      SELECT
+        COUNT(*) FILTER (WHERE conclusion = 'success')::NUMERIC /
+        NULLIF(COUNT(*), 0)
+      FROM github_workflow_runs w
+      WHERE w.repo_id = r.id
+        AND w.created_at > NOW() - INTERVAL '30 days'
+    ) AS ci_success_rate
+  FROM github_repositories r
+)
+SELECT
+  *,
+  -- Calculate health score (0-100)
+  LEAST(100, GREATEST(0,
+    (CASE WHEN commits_last_30d > 0 THEN 20 ELSE 0 END) +
+    (CASE WHEN prs_last_30d > 0 THEN 15 ELSE 0 END) +
+    (CASE WHEN stale_issues < 10 THEN 15 ELSE 0 END) +
+    (COALESCE(pr_merge_rate, 0) * 20)::INTEGER +
+    (CASE WHEN avg_pr_hours < 48 THEN 15 ELSE 5 END) +
+    (COALESCE(ci_success_rate, 0) * 15)::INTEGER
+  )) AS health_score
+FROM repo_metrics
+ORDER BY health_score DESC;
+```
+
+### 7. Developer Contribution Patterns
+
+Identify contribution trends:
+
+```sql
+-- Developer activity heatmap (by day of week and hour)
+SELECT
+    author_name,
+    EXTRACT(DOW FROM author_date) AS day_of_week,
+    EXTRACT(HOUR FROM author_date) AS hour,
+    COUNT(*) AS commits
+FROM github_commits
+WHERE author_date > NOW() - INTERVAL '90 days'
+GROUP BY author_name, day_of_week, hour
+ORDER BY author_name, day_of_week, hour;
+
+-- First-time contributors
+SELECT
+    c.author_name,
+    c.author_email,
+    MIN(c.author_date) AS first_commit,
+    COUNT(*) AS total_commits,
+    COUNT(DISTINCT c.repo_id) AS repos_contributed
+FROM github_commits c
+WHERE c.author_date > NOW() - INTERVAL '90 days'
+GROUP BY c.author_name, c.author_email
+HAVING MIN(c.author_date) > NOW() - INTERVAL '30 days'
+ORDER BY first_commit DESC;
+```
+
+### 8. Sprint Planning Analytics
+
+Analyze issue velocity for sprint planning:
+
+```sql
+-- Issue completion velocity
+WITH weekly_completed AS (
+  SELECT
+    DATE_TRUNC('week', closed_at) AS week,
+    COUNT(*) AS issues_completed,
+    AVG(EXTRACT(DAYS FROM (closed_at - created_at))) AS avg_days_to_close
+  FROM github_issues
+  WHERE state = 'closed'
+    AND closed_at > NOW() - INTERVAL '90 days'
+  GROUP BY DATE_TRUNC('week', closed_at)
+)
+SELECT
+  week,
+  issues_completed,
+  ROUND(avg_days_to_close, 1) AS avg_days_to_close,
+  AVG(issues_completed) OVER (
+    ORDER BY week
+    ROWS BETWEEN 3 PRECEDING AND CURRENT ROW
+  )::INTEGER AS moving_avg_4w
+FROM weekly_completed
+ORDER BY week DESC;
+```
+
+### 9. Security Vulnerability Tracking
+
+Monitor security-related issues and PRs:
+
+```sql
+-- Security issues and fixes
+SELECT
+  r.full_name,
+  CASE
+    WHEN i.id IS NOT NULL THEN 'issue'
+    WHEN p.id IS NOT NULL THEN 'pr'
+  END AS type,
+  COALESCE(i.number, p.number) AS number,
+  COALESCE(i.title, p.title) AS title,
+  COALESCE(i.state, p.state) AS state,
+  COALESCE(i.created_at, p.created_at) AS created_at,
+  COALESCE(i.closed_at, p.merged_at) AS resolved_at,
+  EXTRACT(DAYS FROM NOW() - COALESCE(i.created_at, p.created_at)) AS days_open
+FROM github_repositories r
+LEFT JOIN github_issues i ON r.id = i.repo_id
+  AND EXISTS (
+    SELECT 1 FROM jsonb_array_elements(i.labels) AS l
+    WHERE l->>'name' IN ('security', 'vulnerability', 'cve')
+  )
+LEFT JOIN github_pull_requests p ON r.id = p.repo_id
+  AND EXISTS (
+    SELECT 1 FROM jsonb_array_elements(p.labels) AS l
+    WHERE l->>'name' IN ('security', 'vulnerability', 'cve')
+  )
+WHERE i.id IS NOT NULL OR p.id IS NOT NULL
+ORDER BY days_open DESC;
+```
+
+### 10. Dependency Update Tracking
+
+Track dependency update PRs (e.g., from Dependabot):
+
+```sql
+-- Dependency update PR metrics
+SELECT
+  r.full_name,
+  DATE_TRUNC('month', p.created_at) AS month,
+  COUNT(*) AS dependency_prs,
+  COUNT(*) FILTER (WHERE p.merged = TRUE) AS merged,
+  COUNT(*) FILTER (WHERE p.state = 'closed' AND p.merged = FALSE) AS rejected,
+  AVG(
+    EXTRACT(EPOCH FROM (p.merged_at - p.created_at)) / 3600
+  )::INTEGER AS avg_hours_to_merge
+FROM github_pull_requests p
+JOIN github_repositories r ON p.repo_id = r.id
+WHERE p.user_login IN ('dependabot[bot]', 'renovate[bot]')
+  AND p.created_at > NOW() - INTERVAL '6 months'
+GROUP BY r.full_name, DATE_TRUNC('month', p.created_at)
+ORDER BY month DESC, dependency_prs DESC;
+```
+
+### 11. Cross-Repository Impact Analysis
+
+Analyze changes that affect multiple repositories:
+
+```sql
+-- Find developers working across multiple repos
+SELECT
+    c.author_name,
+    COUNT(DISTINCT c.repo_id) AS repos_contributed,
+    array_agg(DISTINCT r.full_name ORDER BY r.full_name) AS repositories,
+    COUNT(*) AS total_commits,
+    SUM(c.additions + c.deletions) AS total_lines_changed
+FROM github_commits c
+JOIN github_repositories r ON c.repo_id = r.id
+WHERE c.author_date > NOW() - INTERVAL '30 days'
+GROUP BY c.author_name
+HAVING COUNT(DISTINCT c.repo_id) > 1
+ORDER BY repos_contributed DESC, total_commits DESC;
+```
+
+### 12. Documentation Coverage
+
+Track documentation updates relative to code changes:
+
+```sql
+-- Documentation to code change ratio
+WITH doc_changes AS (
+  SELECT
+    repo_id,
+    COUNT(*) AS doc_commits
+  FROM github_commits c,
+       LATERAL jsonb_array_elements(c.files) AS file
+  WHERE file->>'filename' ~* '\.(md|rst|txt|adoc)$'
+    AND c.author_date > NOW() - INTERVAL '90 days'
+  GROUP BY repo_id
+),
+code_changes AS (
+  SELECT
+    repo_id,
+    COUNT(*) AS code_commits
+  FROM github_commits c,
+       LATERAL jsonb_array_elements(c.files) AS file
+  WHERE file->>'filename' ~* '\.(ts|js|py|go|java|rb|php)$'
+    AND c.author_date > NOW() - INTERVAL '90 days'
+  GROUP BY repo_id
+)
+SELECT
+  r.full_name,
+  COALESCE(dc.doc_commits, 0) AS doc_commits,
+  COALESCE(cc.code_commits, 0) AS code_commits,
+  ROUND(
+    COALESCE(dc.doc_commits, 0)::NUMERIC /
+    NULLIF(cc.code_commits, 0) * 100, 2
+  ) AS doc_coverage_pct
+FROM github_repositories r
+LEFT JOIN doc_changes dc ON r.id = dc.repo_id
+LEFT JOIN code_changes cc ON r.id = cc.repo_id
+WHERE cc.code_commits > 0
+ORDER BY doc_coverage_pct DESC;
 ```
 
 ---
